@@ -33,8 +33,8 @@ from [dietpi.com](https://dietpi.com/#download) and drop it in the repo root.
 
 - **Phases 1 & 2 passed on real Pi 4 hardware** (2026-07-23): KMS up, `x16emu`
   r49 + ROM installed to `/opt/x16`, X16 boots fullscreen with a working keyboard.
-- **Phase 3** (autostart appliance) deployed; **Phases 4 & 5** authored and ready
-  to run.
+- **Phase 3** (autostart appliance) deployed;
+- **Phases 4 & 5** authored and ready, in testing.
 - The **black-screen saga is solved** — five stacked display causes diagnosed on
   hardware, with the fixes baked into the scripts and config here. If your screen
   is ever blank, read [DOC/08-display-fixes.md](DOC/08-display-fixes.md) first.
