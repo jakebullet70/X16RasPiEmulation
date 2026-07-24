@@ -1,0 +1,42 @@
+# Phase 1 — DietPi first-boot automation snippet
+#
+# DietPi reads /boot/dietpi.txt on first boot for unattended setup. After
+# flashing the DietPi arm64 image, edit /boot/dietpi.txt on the SD card (from
+# your PC) and set the keys below. These give a headless, minimal, fast-booting
+# base with SSH available for Phase 2 install work.
+#
+# NOTE: set the autostart target to Custom (17) only AFTER Phase 2 works — for
+# Phase 1/2 leave it at console autologin (7) so you can build/test by hand.
+
+# --- unattended install ---
+AUTO_SETUP_AUTOMATED=1
+AUTO_SETUP_LOCALE=C.UTF-8
+AUTO_SETUP_KEYBOARD_LAYOUT=us
+AUTO_SETUP_TIMEZONE=UTC
+
+# --- networking (pick one; Ethernet shown) ---
+AUTO_SETUP_NET_ETHERNET_ENABLED=1
+# AUTO_SETUP_NET_WIFI_ENABLED=1     # if using Wi-Fi, also fill dietpi-wifi.txt
+
+# --- SSH for headless Phase 2 work ---
+# CORRECTED FROM HARDWARE (2026-07-23): on real DietPi the indices are
+#   -1 = Dropbear (light)   -2 = OpenSSH (full)
+# We use OpenSSH (-2). NB: OpenSSH password auth is interactive — when scripting
+# it from this dev box, drive it via WSL + the SSH_ASKPASS trick (scp fails under
+# setsid/askpass; use tar-over-ssh for file transfer). See project memory.
+AUTO_SETUP_SSH_SERVER_INDEX=-2       # -2 = OpenSSH (full, what we use); -1 = Dropbear
+
+# --- keep it lean + responsive ---
+AUTO_SETUP_SWAPFILE_SIZE=0
+CONFIG_CPU_GOVERNOR=performance      # low input latency for the emulator
+CONFIG_HDMI_OUTPUT=1
+AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0   # appliance: don't block boot / print a
+                                     # "waiting for network" banner (X16 needs no net)
+
+# --- autostart target ---
+# 7  = console, autologin  (USE THIS FOR PHASE 1 & 2 — manual testing)
+# 17 = custom script       (SWITCH TO THIS IN PHASE 3 — appliance autostart)
+AUTO_SETUP_AUTOSTART_TARGET_INDEX=7
+
+# --- do NOT install a desktop ---
+# (DietPi Lite installs none by default; just don't add one via software index)

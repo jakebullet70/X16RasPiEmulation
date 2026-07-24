@@ -1,0 +1,16 @@
+# Downloaded / built OS images (too large for git)
+*.img
+*.img.xz
+*.img.gz
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS junk
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

@@ -1,0 +1,23 @@
+# Commander X16 appliance — early boot splash.
+# Paints /opt/x16/x16-splash.raw onto /dev/fb0 as soon as the KMS framebuffer
+# exists, so a branded image shows for most of the boot until the X16 paints.
+#
+# INSTALL:
+#   sudo install -m 0644 config/x16-splash.service /etc/systemd/system/x16-splash.service
+#   sudo systemctl enable x16-splash.service
+#
+[Unit]
+Description=Commander X16 boot splash
+DefaultDependencies=no
+After=systemd-udevd.service local-fs.target
+# Run before the getty/console work so the splash is the first thing on screen.
+Before=getty.target multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/x16-splash
+RemainAfterExit=yes
+TimeoutStartSec=20
+
+[Install]
+WantedBy=sysinit.target

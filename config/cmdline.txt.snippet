@@ -1,0 +1,46 @@
+# Phase 4 — quiet-boot kernel command-line additions for the X16 appliance
+#
+# cmdline.txt is a SINGLE LINE of space-separated kernel params. Do NOT paste
+# these as separate lines — APPEND the tokens below to the end of the existing
+# single line in:
+#   - DietPi / older images:  /boot/cmdline.txt
+#   - Newer Bookworm layout:  /boot/firmware/cmdline.txt
+#
+# Goal: nothing but the X16 ever appears on screen — no rainbow splash, no kernel
+# log spew, no Pi logos, no blinking cursor, no console blanking mid-session.
+# Pair with config.txt's disable_splash=1 (rainbow) and DietPi's own boot text.
+#
+# Tokens to append (all on the one existing line, space-separated):
+#
+#   quiet                        # suppress most kernel boot messages
+#   loglevel=0                   # kernel: emergency-only console log level
+#   logo.nologo                  # hide the Raspberry Pi logo(s) at top of screen
+#   vt.global_cursor_default=0   # no blinking text cursor on the console
+#   consoleblank=0               # never DPMS-blank the console (appliance stays lit)
+#   plymouth.enable=0            # no plymouth boot animation (if present)
+#
+# --- FORCED EDID — the display AND audio fix (see DOC/08-display-fixes.md) -----
+# Append this token. It pins the connector to the synthetic 1080p-only EDID, which:
+#   * cures "TV won't sync the X16's 640x480 DMT => black screen"
+#   * cures the cold-boot connector race
+#   * ENABLES HDMI AUDIO — this path runs through the normal connector probe
+#     (drm_edid_to_eld), so the audio ELD is populated and vc4-hdmi will open the
+#     device. (The runtime debugfs edid_override in custom.sh forces video but
+#     does NOT feed the ELD -> ALSA error 524 / no sound. Prefer THIS token.)
+# Requires: /lib/firmware/edid/x16-1080p.edid installed (tools/gen_edid.py, which
+# now bakes an LPCM audio descriptor into the EDID) AND `dtparam=audio=on` in
+# config.txt. Confirm the connector name first with `ls /sys/class/drm/` — usually
+# HDMI-A-1 on Pi4 (HDMI-A-2 = second port). Use x16-720p.edid for 720p output.
+#
+#   drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+#
+# NOTE: when this token is present, custom.sh auto-skips its debugfs override so
+# the two mechanisms don't fight (double-forcing resets the ELD and kills audio).
+#
+# Example — an existing line like:
+#   console=serial0,115200 console=tty1 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait
+# becomes:
+#   console=serial0,115200 console=tty1 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait quiet loglevel=0 logo.nologo vt.global_cursor_default=0 consoleblank=0 plymouth.enable=0
+#
+# NOTE: keep `console=tty1` — the appliance needs a console tty for KMSDRM to
+# become DRM master. Do not remove it while chasing "quiet".

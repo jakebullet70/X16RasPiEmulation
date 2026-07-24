@@ -1,0 +1,74 @@
+# Phase 1 — Raspberry Pi firmware config for the X16 appliance
+#
+# Append/verify these in the boot config on the SD card:
+#   - DietPi / older images:  /boot/config.txt
+#   - Newer Bookworm layout:  /boot/firmware/config.txt
+# (Use whichever exists on your image.)
+#
+# Goal: full KMS display (required for the SDL2 kmsdrm backend) and a clean,
+# forced 60 Hz HDMI mode so VERA's 60 Hz output maps 1:1 without resampling.
+
+# --- Full KMS / V3D driver (REQUIRED for SDL2 kmsdrm) ---
+# HARDWARE NOTE (2026-07-23): DietPi's RPi config.txt SHIPS THIS LINE COMMENTED
+# OUT. Do not add a duplicate — UNCOMMENT the existing `#dtoverlay=vc4-kms-v3d`
+# line (on the boot/FAT partition). Without it there is no /dev/dri/card* and the
+# kmsdrm backend cannot start.
+#
+# ALSO REQUIRED (learned the hard way): the Mesa GL userspace must be installed or
+# SDL modesets fine but renders BLACK. In Phase 2 install:
+#   apt install libgl1-mesa-dri libegl1 libgles2 libglx-mesa0 libgbm1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# --- Give the GPU/display enough memory ---
+gpu_mem=128
+
+# --- HDMI AUDIO (required for X16 sound) --------------------------------------
+# DietPi ships headless with `dtparam=audio=off`, which tears down the HDMI audio
+# DMA setup so the CONNECTED port has NO sound card ("no HDMI audio" in dmesg) and
+# x16emu fails with ALSA "Unknown error 524" (ENOTSUPP) -> silent fallback. Turn
+# it ON so both HDMI ports get a vc4-hdmi sound card:
+dtparam=audio=on
+
+# --- HDMI: force a known-good 60 Hz mode, no overscan borders ---
+disable_overscan=1
+hdmi_force_hotplug=1        # output even if EDID read fails / TV off at boot
+hdmi_group=1               # 1 = CEA (TV modes)
+hdmi_mode=16               # 16 = 1080p 60Hz  (use 4 for 720p60 on a Pi 3 if needed)
+
+# --- Pi 4 KMS reality (2026-07-23) --------------------------------------------
+# On Pi 4 the FIRMWARE IGNORES hdmi_group/hdmi_mode under full-KMS and injects its
+# own EDID-preferred mode (video=HDMI-A-1:1920x1080M@60). The lines above still
+# matter on Pi 3, but on Pi 4 to actually pin a mode you must EITHER:
+#   disable_fw_kms_setup=1     # let the above hdmi_mode win (+ set it)
+# OR force a synthetic EDID (what THIS project does — see below), which also cures
+# the "TV only accepts CEA, X16 is 640x480 DMT => black screen" problem.
+#
+# FORCED EDID (the appliance's real display fix): advertise ONLY 1920x1080@60 so
+# the connector never offers the 640x480 the TV can't sync, and SDL scales into it.
+#   1. Generate + install:  tools/gen_edid.py -> /lib/firmware/edid/x16-1080p.edid
+#   2. Point the DRM helper at it via cmdline.txt (see cmdline.txt.snippet):
+#        drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+# See DOC/08-display-fixes.md for the full five-cause diagnosis.
+
+# --- Faster, cleaner boot ---
+disable_splash=1
+boot_delay=0
+
+# --- Appliance: kill radios we don't use (removes boot text + speeds boot) ----
+# The onboard Bluetooth chip prints kernel firmware-load messages on the console
+# during boot ("Bluetooth: hci0: BCM: 'brcm/BCM4345C0.hcd'" etc.) that break
+# through even quiet boot. Disable the BT (and Wi-Fi, if Ethernet-only) hardware
+# at the device-tree level so the kernel never probes them:
+dtoverlay=disable-bt
+dtoverlay=disable-wifi      # omit if you rely on Wi-Fi
+# Also mask the service so nothing pulls it back:  systemctl mask bluetooth.service
+# And DietPi: set AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0 in dietpi.txt to drop the
+# "waiting for network" boot banner (the appliance doesn't need the net to start).
+
+# --- Notes ---
+# * Pi 3 vs Pi 4 both use vc4-kms-v3d; this single config works on both.
+# * If your display negotiates an odd resolution, forcing hdmi_group/hdmi_mode
+#   above is the fix. Run `tvservice -m CEA` (or check KMS modes) to list modes.
+# * On Pi 4 with the Bookworm KMS stack you can alternatively set the mode via
+#   cmdline video= ; forcing here is the simplest cross-model approach.
