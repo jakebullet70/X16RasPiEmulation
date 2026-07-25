@@ -34,7 +34,7 @@ X16_JOYSTICKS=$X16_JOYSTICKS
 # Seconds to hold the boot splash (0 = none).
 X16_SPLASH_SECONDS=$X16_SPLASH_SECONDS
 # Where the X16's files live. Empty = the x16 folder on this FAT partition, which
-# a PC can see. Set a path (e.g. /boot/x16) to use the ext4 root instead, for a
+# a PC can see. Set a path (e.g. /mnt/x16) to use the ext4 root instead, for a
 # library too big for this partition.
 X16_FSROOT=$X16_FSROOT
 # PC-visible drop folder bind-mounted inside the fsroot (empty = none). Only used

@@ -87,6 +87,13 @@ the Commander X16 emulator.
   own files one level down — and `SAVE` writes back through the mount onto the
   card. Implemented as `drop_attach()` in `custom.sh` and verified on hardware,
   including the negative cases; `X16_DROP_DIR` names the folder (`FAT-FILES`).
+- **The library moved to `/mnt/x16`** (2026-07-25). It had been `/boot/x16`, which
+  is actively misleading: on Bookworm `/boot` is the ext4 root while the card's
+  FAT partition is `/boot/firmware`, so the name implied "on the card, visible
+  from a PC" — the exact misreading behind the original broken drop workflow.
+  Same partition, honest name. Dev Pi moved, `X16_FSROOT`, the Samba `[X16]`
+  share and the service tools all updated; `/boot/x16.conf` fallbacks in the
+  launchers are a *config file* for older layouts and were deliberately left.
 - **The ext4 library is READ/WRITE and stays that way.** Earlier notes described
   it as "read-only", which was about it being bundled content, not a mount
   option — confirmed on hardware that `/` is `rw` and the X16 can `SAVE` into the

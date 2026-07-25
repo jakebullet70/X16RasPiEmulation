@@ -107,6 +107,13 @@ library as a subdirectory**:
 mount --bind /boot/firmware/x16 <fsroot>/FAT-FILES
 ```
 
+**Put the library in `/mnt/x16`, not `/boot/x16`.** On Bookworm `/boot` is the
+ext4 root and the card's FAT partition is `/boot/firmware` — so a path like
+`/boot/x16` reads as "on the card, visible from a PC" while being nothing of the
+sort. That is precisely the misreading that made the original "drop files on the
+card" workflow silently not work. `/mnt/x16` is unambiguous and matches where
+DietPi keeps bulk data. (Same partition either way; only the name changes.)
+
 The owner sees one drive on their PC; the X16 sees the library at the root with
 their own files in `FAT-FILES`.
 
