@@ -5,7 +5,25 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Blocking the Phase 5 image
 
-- [ ] **Decide where user programs live in the shipped image.** The distributable
+- [ ] **Build the image on a bigger card with a ~3 GB FAT partition.** This is the
+      clean resolution to the fsroot question below: with 3 GB of FAT the whole
+      community library fits beside the boot files, so `-fsroot` goes back on FAT,
+      the drop-from-PC workflow works for everyone, no `X16_FSROOT` override is
+      needed, and it survives a read-only root overlay.
+      - The dev card is only **3.7 GB total** (p1 128 MB, p2 3.6 GB with 1.4 GB
+        used) — 3 GB of FAT does not fit. Needs **8 GB minimum, 16 GB comfortably**.
+      - Cannot be grown in place: enlarging p1 moves p2's *start*, i.e. relocates
+        the whole rootfs. Set the layout when building the image instead.
+      - Layout **A** (preferred): p1 = 3 GB FAT, p2 = ext4 root **last**, so
+        PiShrink's auto-expand keeps working unchanged.
+      - Layout B (p3 data partition) gives a cleaner separate drive in Windows but
+        breaks PiShrink's auto-expand, which grows the last partition with
+        `resize2fs` and would hit FAT.
+      - Repartitioning changes PARTUUID/UUIDs — update `cmdline.txt`
+        (`root=PARTUUID=…`) and both `/etc/fstab` lines or it won't boot.
+
+- [ ] **Decide where user programs live in the shipped image.** Likely settled by
+      the 3 GB FAT partition above; keep this until that's actually built. The distributable
       appliance wants `-fsroot` on the FAT partition so an owner can drop `.PRG`
       files in from any PC ([dist/README-end-user.md](dist/README-end-user.md)
       describes this). But FAT is ~128 MB and the community library is ~250 MB,
