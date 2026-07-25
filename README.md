@@ -99,6 +99,8 @@ dist/       what ships to end users alongside the .img.gz
 | [run-x16.sh](scripts/run-x16.sh) | Manual fullscreen launch for the Phase 2 sanity check |
 | [custom.sh](scripts/custom.sh) | The appliance autostart loop (DietPi autostart index 17) |
 | [x16-display.sh](scripts/x16-display.sh) | Interactive SSH tool: aspect / scale / resolution / forced EDID, live |
+| [x16-wifi.sh](scripts/x16-wifi.sh) | Interactive SSH tool: turn the radio on/off, scan, join a network |
+| [gamepad-test.sh](scripts/gamepad-test.sh) | Diagnose a USB pad — asks libSDL2 directly whether it's usable |
 | [appliance-quiet.sh](scripts/appliance-quiet.sh) | Silences the boot so only the X16 is ever on screen |
 | [x16-splash.sh](scripts/x16-splash.sh) | Paints the boot splash straight to `/dev/fb0` |
 | [fetch-sdcard.sh](scripts/fetch-sdcard.sh) | Populates the `-fsroot` with the community SD-card tree (games, demos, BASIC) |
@@ -172,7 +174,12 @@ The appliance is **Ethernet-only by default**. [config.txt.snippet](config/confi
 sets `dtoverlay=disable-wifi`, which removes the radio at the device-tree level —
 quieter and slightly faster to boot, and the emulator needs no network at all.
 
-To use Wi-Fi instead, all three of these are required:
+Easiest route on a running Pi is `sudo x16-wifi`
+([x16-wifi.sh](scripts/x16-wifi.sh)) — it shows the radio state up front, toggles
+the overlay for you, scans, and joins. It deliberately **refuses** to save
+credentials while the radio is off, rather than letting them silently do nothing.
+
+Doing it by hand instead, all three of these are required:
 
 1. **Delete `dtoverlay=disable-wifi`** from `config.txt`. Miss this and the rest
    does nothing — `wlan0` never appears, so correct credentials simply have no
