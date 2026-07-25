@@ -5,53 +5,23 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Blocking the Phase 5 image
 
-- [ ] **Build the image on a bigger card with a ~3 GB FAT partition.** This is the
-      clean resolution to the fsroot question below: with 3 GB of FAT the whole
-      community library fits beside the boot files, so `-fsroot` goes back on FAT,
-      the drop-from-PC workflow works for everyone, no `X16_FSROOT` override is
-      needed, and it survives a read-only root overlay.
-      - The dev card is only **3.7 GB total** (p1 128 MB, p2 3.6 GB with 1.4 GB
-        used) — 3 GB of FAT does not fit. Needs **8 GB minimum, 16 GB comfortably**.
-      - Cannot be grown in place: enlarging p1 moves p2's *start*, i.e. relocates
-        the whole rootfs. Set the layout when building the image instead.
-      - Layout **A** (preferred): p1 = 3 GB FAT, p2 = ext4 root **last**, so
-        PiShrink's auto-expand keeps working unchanged.
-      - Layout B (p3 data partition) gives a cleaner separate drive in Windows but
-        breaks PiShrink's auto-expand, which grows the last partition with
-        `resize2fs` and would hit FAT.
-      - Repartitioning changes PARTUUID/UUIDs — update `cmdline.txt`
-        (`root=PARTUUID=…`) and both `/etc/fstab` lines or it won't boot.
-
-- [ ] **Decide where user programs live in the shipped image.** Likely settled by
-      the 3 GB FAT partition above; keep this until that's actually built. The distributable
-      appliance wants `-fsroot` on the FAT partition so an owner can drop `.PRG`
-      files in from any PC ([dist/README-end-user.md](dist/README-end-user.md)
-      describes this). But FAT is ~128 MB and the community library is ~250 MB,
-      so a machine with the full library must keep the fsroot on ext4 and add
-      files over Samba. `X16_FSROOT` lets each machine choose; the *image* still
-      has to pick one story.
-      Leaning: ship a small curated selection on FAT, treat the full library as
-      an optional `x16-fetch-sd --dest` extra.
-      Note this interacts with hardening — under a read-only root overlay,
-      anything written to an ext4 fsroot does not survive reboot.
+- [ ] **Build the image with a 512 MB FAT partition + bind-mounted drop folder.**
+      Layout decided and verified on hardware 2026-07-25 — see DOC/07 Part A2.
+      FAT is fixed at build time (PiShrink expands root, never FAT), so it must
+      fit a 4 GB card: 512 MB leaves ~3.2 GB for a system that needs ~1.4 GB.
+      Library stays on ext4; `mount --bind /boot/firmware/x16 <fsroot>/MYFILES`
+      exposes the PC-writable folder inside it. Confirmed: CD/DIR/LOAD all work
+      in subdirectories, and SAVE writes back through the bind mount onto FAT.
+      Remaining work: create the partition at that size when building, add the
+      bind-mount to `custom.sh`, and ship `dist/fat-x16-README.TXT` in the folder.
+      Repartitioning changes PARTUUID/UUIDs — update `cmdline.txt` and both
+      `/etc/fstab` lines or it won't boot.
 
 - [ ] **The shipped image must not carry the dev Pi's Wi-Fi state.** The applier
       exists now (`x16-wifi.conf` + `x16-wifi-apply.service`), but the image has
       to ship with `X16_WIFI_SSID=` empty and **no** `.x16-wifi.state` /
       `.x16-wifi.nohardware` stamp files on the FAT partition — a shipped stamp
       would make the owner's first edit look "unchanged" and be ignored.
-
-- [ ] **HDMI mode is not pinned in `config.txt`.** Found 2026-07-25: the dev Pi
-      has no `hdmi_group` / `hdmi_mode` / `hdmi_force_hotplug`, even though
-      `config.txt.snippet` contains them and DOC/06 §4.1 claims Phase 1 applied
-      them. Consequence: the *firmware* builds the `video=` token from whatever
-      it can read from the TV at power-on, and when the TV is off or slow it
-      falls back to `video=HDMI-A-1:640x480M@60`. That gets injected as a
-      cmdline mode which outranks the forced EDID — the appliance was observed
-      scanning out **640x480**. On a TV that rejects 640x480 DMT this is the
-      original black screen, back by another route. Needs the snippet's lines
-      applied, plus `disable_fw_kms_setup=1` on Pi 4 (the snippet notes the
-      firmware ignores `hdmi_mode` under full-KMS otherwise).
 
 ## Phase 5 — harden & package ([DOC/07](DOC/07-phase5-harden-package.md))
 

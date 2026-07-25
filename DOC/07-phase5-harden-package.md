@@ -63,6 +63,64 @@ corruption.
 
 ---
 
+## Part A2 — Card layout: 512 MB FAT + bind-mounted drop folder
+
+_Decided 2026-07-25, after testing the X16's host filesystem on hardware._
+
+Owners supply their own card, **4 GB to 32 GB**. That single fact drives the whole
+layout, because **the FAT partition's size is fixed when the image is built** —
+PiShrink's auto-expand grows the *last* partition (root), never FAT. So FAT must
+fit the *smallest* supported card, and every owner gets that same size no matter
+how big their card is.
+
+A 4 GB card is ~3.7 GiB usable and the installed system needs ~1.4 GB, so:
+
+| FAT size | Root left on a 4 GB card | Verdict |
+|---|---|---|
+| 3 GB | ~0.7 GB | **won't boot** |
+| 1 GB | ~2.7 GB | works, tight-ish |
+| **512 MB** | ~3.2 GB | **chosen** — comfortable everywhere |
+
+512 MB is not a compromise: `.PRG` files are tens of kilobytes, so it holds
+thousands of programs. Nobody hand-copies gigabytes of them.
+
+### The split
+
+The two kinds of content have different needs, so they live in different places:
+
+- **The bundled community library** (~250 MB) is effectively read-only and never
+  needs to be reachable from a PC → **ext4 root**, where space is plentiful.
+- **The owner's own programs** are small but *must* be PC-writable → **FAT**.
+
+`x16emu` takes only one `-fsroot`, so the FAT folder is **bind-mounted into the
+library as a subdirectory**:
+
+```sh
+mount --bind /boot/firmware/x16 <fsroot>/MYFILES
+```
+
+The owner sees one drive on their PC; the X16 sees the library at the root with
+their own files in `MYFILES`.
+
+### Verified on hardware (r49, 2026-07-25)
+
+Tested headlessly with `x16emu -bas … -run -echo -warp` under
+`SDL_VIDEODRIVER=dummy`, so it needs no display:
+
+- `DOS"CD:MYFILES"` + `DOS"$"` lists the subdirectory correctly.
+- `LOAD"MYFILES/SUB.PRG",8` works **without** changing directory first.
+- `DOS"CD:MYFILES"` then `LOAD"SUB.PRG",8` also works.
+- Across the bind mount, the X16 sees files placed on the FAT side from a PC.
+- **`SAVE` writes back through the bind mount onto the FAT partition** — so it's
+  two-way, and an owner can save their own work and copy it off on a PC.
+
+Gotcha: the `@` shorthand (`@$`, `@CD:NAME`) is **immediate mode only**. Inside a
+numbered BASIC program it is a `?SYNTAX ERROR`; use the `DOS"…"` form there. The
+`@` form is what to put in user-facing docs, since that's what people type.
+
+`dist/fat-x16-README.TXT` ships in that FAT folder to explain all of this to the
+owner — it's the first thing they see when they open the card.
+
 ## Part B — Capture the distributable image
 
 Turn the working, hardened SD card into a compact `.img` others can flash.
