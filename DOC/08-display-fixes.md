@@ -58,9 +58,34 @@ waiting ~15 min on this TV's slow EDID read — the infamous "card1 appears at 9
   mode). This needs no reboot and auto-detects the connected HDMI connector + card
   minor (Pi 3/Pi 4 safe), so it does **not** depend on a hardcoded `HDMI-A-1`.
 - **Optional belt-and-suspenders:** also persist via `/lib/firmware/edid/` + cmdline
-  `drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid` (forces the mode even
+  `drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid` (forces the mode even
   earlier, before `custom.sh` runs). Not required given the runtime override, but
   harmless. Confirm the connector name with `ls /sys/class/drm/` first.
+
+> ### Two traps in the cmdline-EDID path — both hit on real hardware 2026-07-25
+>
+> **1. The parameter is `drm.edid_firmware`, not `drm_kms_helper.edid_firmware`.**
+> It moved into the DRM core. On the Pi's 6.12 kernel the old name is rejected:
+> `drm_kms_helper: unknown parameter 'edid_firmware' ignored`. This fails
+> *silently* on screen — the picture still comes up via the `video=` token — so
+> the appliance had been running for days with no EDID forcing at all, and
+> `custom.sh` was additionally skipping its own runtime fallback because it saw
+> the (dead) token on the cmdline. The guard now reads
+> `/sys/module/drm/parameters/edid_firmware` instead of parsing cmdline text.
+> Verify with: `cat /sys/class/drm/card1-HDMI-A-1/modes` — a long list including
+> `640x480` means the TV's real EDID is still in use; forced looks like three
+> lines of `1920x1080`.
+>
+> **2. A synthetic EDID needs an HDMI Vendor Specific Data Block or you lose
+> sound.** The kernel decides a sink is HDMI rather than DVI by finding the HDMI
+> Licensing IEEE registration `00-0C-03` in a CEA vendor-specific block
+> (`drm_detect_hdmi_monitor()`). A DVI sink has no audio path, so vc4-hdmi refuses
+> to open the device and SDL reports
+> `ALSA: Couldn't open audio device: Unknown error 524` (ENOTSUPP) — the appliance
+> loop then falls back to `SDL_AUDIODRIVER=dummy` and runs *silently*. Setting
+> basic-audio and an LPCM SAD is **not** sufficient on its own. `gen_edid.py` now
+> emits the VSDB; the moment it did, ALSA opened first try with the EDID still
+> forced.
 
 ### 4. Black screen while the GPU was actually rendering
 `kmscube -D /dev/dri/card1` (a spinning-cube GLES test) **worked** — so GLES →
@@ -105,7 +130,7 @@ and `custom.sh` fell back to silent `dummy` audio. **Three stacked causes:**
    but never rebuilds the audio ELD (`drm_edid_to_eld` isn't re-run), so the ELD
    stayed empty and audio stayed broken **even with the SAD in the EDID**. Fix:
    force the EDID via the kernel cmdline instead —
-   `drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid` — which runs through
+   `drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid` — which runs through
    the normal connector probe and **does** feed the ELD. `custom.sh` now **skips**
    its debugfs override when this cmdline token is present (double-forcing resets
    the ELD and re-breaks audio).
@@ -150,7 +175,7 @@ and `custom.sh` fell back to silent `dummy` audio. **Three stacked causes:**
    # OPTIONAL early-boot persistence (belt-and-suspenders, not required):
    sudo install -D -m 0644 x16-1080p.edid /lib/firmware/edid/x16-1080p.edid
    # then append to the single cmdline.txt line (confirm connector name first):
-   #   drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+   #   drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
    ```
 4. **`x16.conf`** on the boot partition (`/boot/firmware/x16.conf`).
 5. **`x16-display`** tool installed for live changes:

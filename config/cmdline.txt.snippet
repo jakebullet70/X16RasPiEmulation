@@ -32,10 +32,23 @@
 # config.txt. Confirm the connector name first with `ls /sys/class/drm/` — usually
 # HDMI-A-1 on Pi4 (HDMI-A-2 = second port). Use x16-720p.edid for 720p output.
 #
-#   drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+#   drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
 #
-# NOTE: when this token is present, custom.sh auto-skips its debugfs override so
+# !! PARAMETER NAME !! It is `drm.edid_firmware`, NOT `drm_kms_helper.edid_firmware`.
+# The option moved into the DRM core; on the Pi's 6.12 kernel the old name is
+# rejected outright and the boot log says:
+#     drm_kms_helper: unknown parameter 'edid_firmware' ignored
+# It fails SILENTLY as far as the screen is concerned — the display can still come
+# up via the `video=` token, so you get no visible symptom while the EDID (and
+# with it the audio ELD) is never actually forced. Verify it took:
+#     cat /sys/module/drm/parameters/edid_firmware     # must echo your path
+#     cat /sys/class/drm/card1-HDMI-A-1/modes          # must list ONLY 1920x1080
+# A long mode list including 640x480 means the TV's real EDID is still in use.
+#
+# NOTE: when this token is in effect, custom.sh auto-skips its debugfs override so
 # the two mechanisms don't fight (double-forcing resets the ELD and kills audio).
+# It detects that from the module parameter above, not from the cmdline text —
+# a stale/misspelled token must not suppress the fallback.
 #
 # Example — an existing line like:
 #   console=serial0,115200 console=tty1 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait

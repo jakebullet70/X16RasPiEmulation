@@ -48,7 +48,7 @@ hdmi_mode=16               # 16 = 1080p 60Hz  (use 4 for 720p60 on a Pi 3 if nee
 # the connector never offers the 640x480 the TV can't sync, and SDL scales into it.
 #   1. Generate + install:  tools/gen_edid.py -> /lib/firmware/edid/x16-1080p.edid
 #   2. Point the DRM helper at it via cmdline.txt (see cmdline.txt.snippet):
-#        drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+#        drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
 # See DOC/08-display-fixes.md for the full five-cause diagnosis.
 
 # --- Faster, cleaner boot ---

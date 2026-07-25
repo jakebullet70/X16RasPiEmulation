@@ -87,15 +87,24 @@ done
 # NOTE: this runtime debugfs override forces VIDEO but does NOT rebuild the audio
 # ELD, so vc4-hdmi returns ENOTSUPP (-524) and there is no HDMI sound. The FULL
 # fix (video + audio) is to force the EDID via the kernel cmdline instead:
-#   drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid   (+ dtparam=audio=on)
+#   drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid   (+ dtparam=audio=on)
 # When that cmdline token is present the connector probe already forces the mode
 # AND feeds drm_edid_to_eld, so we MUST skip this override (double-forcing would
 # reset the ELD and kill audio). This runtime path stays only as a fallback for
 # images that have not baked in the cmdline token yet.
 apply_edid() {
   [ "${X16_FORCE_EDID:-1}" = 1 ] || return 0
-  # cmdline firmware EDID already forces mode + audio ELD -> don't fight it.
-  grep -q "drm_kms_helper.edid_firmware=" /proc/cmdline 2>/dev/null && return 0
+  # A kernel-forced EDID already sets the mode AND rebuilds the audio ELD, so
+  # re-forcing here would reset the ELD and kill HDMI sound -> skip.
+  # Check the MODULE PARAMETER, not the cmdline text: the parameter moved from
+  # drm_kms_helper to drm (empty on 6.12 with the old name, which the kernel
+  # ignores outright), so a stale cmdline token would wrongly suppress this
+  # fallback and leave no EDID forcing at all.
+  for p in /sys/module/drm/parameters/edid_firmware \
+           /sys/module/drm_kms_helper/parameters/edid_firmware; do
+    [ -r "$p" ] || continue
+    [ -n "$(cat "$p" 2>/dev/null)" ] && return 0
+  done
   find_hdmi || return 0
   ov="/sys/kernel/debug/dri/${CARD}/${CONN_NAME}/edid_override"
   [ -e "$ov" ] || return 0

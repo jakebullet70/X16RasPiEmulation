@@ -30,7 +30,7 @@ DEPLOY ON THE PI (persist the forced EDID across reboots):
   1. Copy the file to the kernel firmware EDID dir:
        sudo install -D -m 0644 x16-1080p.edid /lib/firmware/edid/x16-1080p.edid
   2. Point the DRM helper at it via cmdline.txt (single line, append token):
-       drm_kms_helper.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
+       drm.edid_firmware=HDMI-A-1:edid/x16-1080p.edid
      (connector name is usually HDMI-A-1 on Pi4; confirm with
       `ls /sys/class/drm/`. Use HDMI-A-2 for the 2nd Pi4 port.)
   3. Keep a copy in /opt/x16 as a backup / for the runtime debugfs override.
@@ -128,7 +128,17 @@ def cea_extension(mode):
     # ADB: tag 1, length 3; one LPCM Short Audio Descriptor (fills the ELD so
     # vc4-hdmi will actually open the audio device).
     adb = bytes([(1 << 5) | len(SAD_LPCM_2CH)]) + SAD_LPCM_2CH
-    collection = vdb + adb
+    # VSDB: tag 3. WITHOUT THIS THERE IS NO SOUND. The kernel decides a sink is
+    # HDMI (rather than DVI) by finding the HDMI Licensing IEEE registration id
+    # 00-0C-03 in a vendor-specific data block — drm_detect_hdmi_monitor(). A DVI
+    # sink has no audio path, so vc4-hdmi refuses to open the device and ALSA
+    # returns ENOTSUPP (-524, "Unknown error 524"), even though basic-audio is
+    # set and the SAD above is present. Observed on real hardware 2026-07-25:
+    # forcing an EDID without this block silently killed HDMI audio.
+    # Payload: OUI 03 0C 00 (little-endian), then source physical address 1.0.0.0.
+    vsdb_payload = bytes([0x03, 0x0C, 0x00, 0x10, 0x00])
+    vsdb = bytes([(3 << 5) | len(vsdb_payload)]) + vsdb_payload
+    collection = vdb + adb + vsdb
     dtd_offset = 4 + len(collection)    # header(4) + data block collection
     b += bytes([0x02, 0x03, dtd_offset, 0x41])  # tag, rev3, d, basic-audio+1 DTD
     b += collection
