@@ -78,7 +78,23 @@ the useful ones are:
 
 Save the file, eject, and boot the Pi to see the change.
 
-## 6. If something's wrong
+## 6. Adding programs over your network (optional)
+
+If you'd rather not keep taking the card out, the Pi can share the folder over
+your home network. Run this once, with the Pi connected by Ethernet or Wi-Fi:
+
+```bash
+sudo ~/scripts/setup-samba.sh
+```
+
+Then on a PC open `\\<pi-address>\X16` and drag files in. The login is `dietpi`
+with password `dietpi` — the stock defaults, fine on a home network, but change
+them (`passwd`, then `smbpasswd -a dietpi`) if your network isn't private.
+
+To reach the Pi's command line at all, connect with SSH as `root`, password
+`dietpi`.
+
+## 7. If something's wrong
 
 | What you see | What to try |
 | --- | --- |

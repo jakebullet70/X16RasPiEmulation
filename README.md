@@ -145,6 +145,32 @@ blob that `x16-splash.sh` writes to the framebuffer.
   `X16_JOYSTICKS` (0–4, default 1).
 - **Appliance log:** `/var/log/x16-appliance.log`.
 
+### Getting in
+
+| Access | Address | User | Password |
+| --- | --- | --- | --- |
+| SSH | `<pi-ip>` or hostname (default `DietPi`) | `root` | `dietpi` |
+| Samba share | `\\<pi-ip>\X16` | `dietpi` or `x16` | `dietpi` |
+
+> **These are DietPi's stock defaults, published here for convenience on a
+> private LAN — they are not secrets.** Anyone who can reach the Pi can use them.
+> Change both before putting the machine on a network you don't control:
+> `passwd` for the login, `smbpasswd -a <user>` for the share. `setup-samba.sh`
+> honours `SMB_USER` / `SMB_PASS` if you'd rather not use the defaults at all:
+>
+> ```bash
+> sudo SMB_USER=me SMB_PASS='something-better' ~/scripts/setup-samba.sh
+> ```
+>
+> Note `unix password sync` is on in DietPi's `smb.conf`, so changing a Samba
+> password can rewrite that account's **login** password as a side effect. Turn
+> the setting off for the change if you don't want that.
+
+Browsing to `\\<pi-ip>` needs share *enumeration*, which is a separate permission
+from reading the share — if that's denied while `\\<pi-ip>\X16` works, see the
+`[homes]` note in [setup-samba.sh](scripts/setup-samba.sh). Windows also caches
+failed credentials aggressively; `net use * /delete /y` before retrying.
+
 ## Documentation
 
 Full index with per-document summaries: [DOC/README.md](DOC/README.md). The
