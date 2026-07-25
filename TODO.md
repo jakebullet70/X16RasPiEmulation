@@ -49,33 +49,37 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Nice to have
 
-## Boot time (measured 2026-07-25 — bigger than previously thought)
+## Boot time — DONE 2026-07-25 (20.3 s → 3.3 s to the X16)
 
-Boot-to-X16 is **20.3 s**, not the ~18 s previously recorded, and the earlier
-"~4.7 s from `ifup@eth0`" was a large underestimate — it is **14.9 s**.
+Both fixes applied on the dev Pi and captured in
+[`scripts/trim-boot.sh`](scripts/trim-boot.sh) (idempotent, `--revert`
+supported). **Must be run when building the image.**
 
-- [ ] **`serial-getty@ttyS0` stalls the boot for 90 s.** `dev-ttyS0.device` never
-      appears, so the job sits until it times out at 92.9 s, and only then do
-      `multi-user.target` / `graphical.target` activate. It does **not** delay the
-      X16 (tty1 is up at 20.3 s) but any unit ordered `WantedBy=multi-user.target`
-      waits a minute and a half, and a shipped image should not contain a
-      guaranteed 90 s timeout. Fix: mask `serial-getty@ttyS0.service`, and check
-      `cmdline.txt` isn't still asking for a serial console.
-- [ ] **Decouple `getty@tty1` from `network.target`** — the single biggest win.
-      `ifup@eth0` takes 14.9 s, almost all of it waiting for the router's
-      `DHCPOFFER` (request at 5.6 s, offer at 19.8 s — the Pi is idle, the router
-      is slow). `systemd-user-sessions` is ordered after `network.target` and
-      `getty@tty1` after that, so the X16 waits on DHCP for no reason. A drop-in
-      clearing that ordering should take boot-to-X16 to roughly 5-6 s.
-- [ ] Consider replacing the getty/autologin chain with a dedicated `x16.service`
-      (`After=sysinit.target`, `TTYPath=/dev/tty1`, conflicting with
-      `getty@tty1`). Removes agetty + login + shell profile from the path and is
-      deterministic. Trade-off: it steps outside `dietpi-autostart`, which is the
-      DietPi-supported mechanism — weigh against the coexistence rule.
-- [ ] Cheap trims once the above land: `X16_SPLASH_SECONDS=3` is 3 s of
-      deliberate delay before `x16emu`; `rpi-eeprom-update` 688 ms;
-      `keyboard-setup` 302 ms; FAT `systemd-fsck` 435 ms. Kernel itself is only
-      1.77 s, so there is little left below that.
+- [x] `getty@tty1` no longer ordered behind `network.target`. It was waiting for
+      `ifup@eth0` → the router's `DHCPOFFER`, 7.9–14.9 s with the Pi idle.
+      `getty@tty1` now starts at **3.3 s** (was 20.3 s).
+- [x] `serial-getty@ttyS0` disabled + `console=ttyS0` dropped from `cmdline.txt`.
+      It had been waiting out a 90 s device timeout every boot, so
+      `multi-user.target` didn't activate until 92.9 s. Total boot is now ~16 s
+      instead of ~93 s, and nothing blocks the X16.
+
+Remaining, optional:
+
+- [ ] `X16_SPLASH_SECONDS=3` is now the single largest delay before the `READY.`
+      prompt — 3 s of deliberate hold on a 3.3 s boot. Reconsider (1 s?) now that
+      there is no long wait for it to cover.
+- [ ] A dedicated `x16.service` (`After=basic.target`, `TTYPath=/dev/tty1`) would
+      drop agetty + login + shell profile from the path — maybe 0.5–1 s more, and
+      more deterministic. Trade-off: steps outside `dietpi-autostart`, which is
+      DietPi's supported mechanism. Low value now that the big win is banked.
+- [ ] Cheap trims: `rpi-eeprom-update` 688 ms, `keyboard-setup` 302 ms, FAT
+      `systemd-fsck` 435 ms. Kernel is 1.66 s, so ~3 s is close to the floor.
+- [ ] **Static IP is not needed for boot speed** and should NOT ship in the
+      image (unknown network, collision risk). DHCP now finishes in the
+      background, ~14 s after the X16 is already up. If a stable address is
+      wanted on a dev unit, prefer a DHCP reservation on the router over editing
+      `/etc/network/interfaces` — no pool collision, survives re-imaging, and no
+      risk of locking yourself out of a headless Pi.
 - [ ] `x16-wifi` / `x16-wifi-apply` are untested against a REAL access point. On
       the dev Pi the radio came up and the applier drove it correctly (interface
       detection, regulatory domain, rfkill, config generation, and the failure
@@ -88,6 +92,12 @@ Boot-to-X16 is **20.3 s**, not the ~18 s previously recorded, and the earlier
       decide whether it's worth keeping.
 
 ## Watch out for (bitten by these already)
+
+- **A systemd drop-in cannot remove an ordering dependency.** `After=` (empty)
+  resets the unit's own list, but systemd already registered the mirrored
+  `Before=` edge on the other unit while parsing, and that survives. Verified
+  here: the drop-in loaded correctly and changed nothing across a full reboot.
+  Use a full unit override in `/etc/systemd/system/` so the line is never parsed.
 
 - Anything writing `x16.conf` must round-trip **every** key; `x16-display`
   rewrites the file wholesale and silently dropped settings until
