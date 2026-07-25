@@ -78,7 +78,39 @@ the useful ones are:
 
 Save the file, eject, and boot the Pi to see the change.
 
-## 6. Adding programs over your network (optional)
+## 6. Connecting to Wi-Fi (optional)
+
+The Pi uses a network cable out of the box. To use Wi-Fi instead, you don't need
+a keyboard or any commands — just edit a file on the card:
+
+1. Power the Pi off and put the SD card in your computer.
+2. Open **`x16-wifi.conf`** on the small drive that appears, in any plain text
+   editor (Notepad is fine).
+3. Fill in your network name and password, and set your country:
+
+   ```text
+   X16_WIFI_SSID=YourNetworkName
+   X16_WIFI_PSK=YourPassword
+   X16_WIFI_COUNTRY=GB
+   ```
+
+4. Save, eject the card, put it back in the Pi, and power on.
+
+The Pi applies the settings itself. **The first time you do this it restarts once
+on its own** — switching the radio on needs a restart — so give it an extra
+minute before assuming something is wrong.
+
+Notes:
+
+- The country code is required. Wi-Fi is regulated per country and the Pi won't
+  transmit properly until it knows where it is. `GB`, `US`, `DE`, `FR`, `AU`, …
+- The network name is case-sensitive.
+- The password sits in a plain text file that any PC can read, so don't use this
+  on a network whose password you'd mind sharing.
+- If it doesn't connect, the reason is written to `/var/log/x16-appliance.log`
+  on the Pi — usually a wrong password or the wrong country code.
+
+## 7. Adding programs over your network (optional)
 
 If you'd rather not keep taking the card out, the Pi can share the folder over
 your home network. Run this once, with the Pi connected by Ethernet or Wi-Fi:
@@ -94,7 +126,7 @@ them (`passwd`, then `smbpasswd -a dietpi`) if your network isn't private.
 To reach the Pi's command line at all, connect with SSH as `root`, password
 `dietpi`.
 
-## 7. If something's wrong
+## 8. If something's wrong
 
 | What you see | What to try |
 | --- | --- |
@@ -105,6 +137,7 @@ To reach the Pi's command line at all, connect with SSH as `root`, password
 | Gamepad does nothing | Plug it in before switching on. If it's still ignored, check `X16_JOYSTICKS` is not `0` in `x16.conf` (section 5). Unusual controllers may simply not be recognised. |
 | `DIR` doesn't show my files | They must be inside the `x16` folder on the small drive, not loose at its top level. Check the filenames end in `.PRG` or `.BAS`. |
 | It won't start at all | Re-flash the image (section 1). If that fails too, the SD card may be worn out — they do wear out. Try another card. |
+| Wi-Fi won't connect | Check the network name's spelling and capitals, and that `X16_WIFI_COUNTRY` is your country (section 6). Remember the Pi restarts itself once the first time you enable Wi-Fi. |
 
 ## About this image
 

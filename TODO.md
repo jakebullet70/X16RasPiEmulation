@@ -64,7 +64,11 @@ Running list of what's outstanding. Status of what's *done* lives in
       `systemd-user-sessions` and therefore `getty@tty1` are ordered after. A
       drop-in dropping that ordering would get boot-to-X16 from ~18 s to ~13 s,
       at the cost of fighting Debian's default ordering.
-- [ ] `x16-wifi` is untested against a real access point — the dev Pi runs
+- [ ] `x16-wifi` / `x16-wifi-apply` are untested against a REAL access point. On
+      the dev Pi the radio came up and the applier drove it correctly (interface
+      detection, regulatory domain, rfkill, config generation, and the failure
+      path all exercised), but association itself has never succeeded because
+      that Pi is Ethernet-only. Test on a Pi 3 too — different Wi-Fi chip.
       Ethernet with the radio disabled in the device tree. The refusal path (no
       `wlan0`) and the status view are verified; scan/join are not.
 - [ ] Consider bundling `x16-gamepad-test` and `x16-wifi` into the shipped image,

@@ -1,0 +1,26 @@
+[Unit]
+Description=Apply Commander X16 appliance Wi-Fi settings from the SD card
+Documentation=https://github.com/jakebullet70/X16RasPiEmulation
+# Needs the FAT boot partition mounted to read x16-wifi.conf.
+RequiresMountsFor=/boot/firmware
+After=local-fs.target
+# Must land before anything that wants the network to be up, or the first boot
+# after an edit races DHCP and services start with no connectivity.
+Before=network-pre.target network.target
+Wants=network-pre.target
+# Ethernet-only machines are the common case and exit in milliseconds; this must
+# never hold up the boot the emulator is waiting on.
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/x16-wifi-apply
+# The script waits up to 20s for the interface (a Pi 3 loads brcmfmac slowly)
+# plus 15s for association. Cap it so a wedged radio cannot stall boot forever.
+TimeoutStartSec=60
+# A missing network must not prevent the X16 from starting — it needs no network.
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=sysinit.target

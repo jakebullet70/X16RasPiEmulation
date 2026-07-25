@@ -174,6 +174,27 @@ The appliance is **Ethernet-only by default**. [config.txt.snippet](config/confi
 sets `dtoverlay=disable-wifi`, which removes the radio at the device-tree level —
 quieter and slightly faster to boot, and the emulator needs no network at all.
 
+**On a shipped image the owner just edits a file.**
+[x16-wifi.conf](config/x16-wifi.conf) sits on the FAT partition next to
+`x16.conf`; [x16-wifi-apply.sh](scripts/x16-wifi-apply.sh) (run at boot by
+[x16-wifi-apply.service](config/x16-wifi-apply.service)) reads it, and if an SSID
+is set while the radio is still disabled it removes the overlay and reboots once
+to load the driver. No loop is possible: removing the line from `config.txt` is
+persistent, so the condition is false next boot — and it only reboots after
+verifying the edit stuck, since on a read-only or full card the write could fail.
+With no SSID set it exits in ~16 ms, so Ethernet-only machines pay nothing.
+
+**It coexists with DietPi's own tools rather than fighting them.** `dietpi-config`
+(Network Options) and `dietpi-wifi.txt` also own `wpa_supplicant.conf` and the
+overlay, so the card is treated as authoritative *only at the moment it changes*:
+a fingerprint stamp lives beside the config on the FAT partition, and an
+unchanged config means nothing is touched at all — whatever you set in
+`dietpi-config` stands. Without that, disabling Wi-Fi in `dietpi-config` while an
+SSID was still present would be undone by a surprise reboot on every boot. The
+stamp is on FAT, not `/var/lib`, so it survives the Phase 5 read-only overlay;
+under that overlay a `/var/lib` stamp would vanish each boot and the config would
+look changed forever.
+
 Easiest route on a running Pi is `sudo x16-wifi`
 ([x16-wifi.sh](scripts/x16-wifi.sh)) — it shows the radio state up front, toggles
 the overlay for you, scans, and joins. It deliberately **refuses** to save
