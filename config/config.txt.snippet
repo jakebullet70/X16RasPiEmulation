@@ -61,7 +61,12 @@ boot_delay=0
 # through even quiet boot. Disable the BT (and Wi-Fi, if Ethernet-only) hardware
 # at the device-tree level so the kernel never probes them:
 dtoverlay=disable-bt
-dtoverlay=disable-wifi      # omit if you rely on Wi-Fi
+# !! DELETE THE NEXT LINE IF YOU USE WI-FI !! It removes the radio in the device
+# tree, so wlan0 never appears at all. Filling dietpi-wifi.txt / setting
+# AUTO_SETUP_NET_WIFI_ENABLED=1 will then do nothing and the failure is silent:
+# valid credentials, no interface. Ethernet-only appliances want it (quieter,
+# slightly faster boot); anything wireless must not have it.
+dtoverlay=disable-wifi
 # Also mask the service so nothing pulls it back:  systemctl mask bluetooth.service
 # And DietPi: set AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0 in dietpi.txt to drop the
 # "waiting for network" boot banner (the appliance doesn't need the net to start).

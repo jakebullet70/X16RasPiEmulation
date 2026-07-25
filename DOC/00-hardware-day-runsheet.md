@@ -18,7 +18,10 @@ DRM master. 🔁 Emulator + ROM are **version-locked at r49**.
    - Merge `config/dietpi.txt.snippet` → `dietpi.txt` (keep `AUTO_SETUP_AUTOSTART_TARGET_INDEX=7`).
    - Append `config/config.txt.snippet` → `config.txt`.
    - Append `config/cmdline.txt.snippet` tokens → the **single line** of `cmdline.txt` (keep `console=tty1`).
-   - Wi-Fi only: fill `dietpi-wifi.txt`.
+   - Wi-Fi only: fill `dietpi-wifi.txt`, set `AUTO_SETUP_NET_WIFI_ENABLED=1` in
+     `dietpi.txt`, **and delete the `dtoverlay=disable-wifi` line you just pasted
+     from `config.txt.snippet`** — it switches the radio off in the device tree,
+     so `wlan0` never appears and the credentials are silently ignored.
    - _(path is `/boot/…` or `/boot/firmware/…` depending on image — use whichever exists.)_
 3. Insert card, connect HDMI+keyboard+Ethernet, power on. First-boot install runs (may reboot) → console autologin.
 ```bash

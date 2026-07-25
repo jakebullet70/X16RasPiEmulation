@@ -166,6 +166,25 @@ blob that `x16-splash.sh` writes to the framebuffer.
 > password can rewrite that account's **login** password as a side effect. Turn
 > the setting off for the change if you don't want that.
 
+### Wi-Fi
+
+The appliance is **Ethernet-only by default**. [config.txt.snippet](config/config.txt.snippet)
+sets `dtoverlay=disable-wifi`, which removes the radio at the device-tree level —
+quieter and slightly faster to boot, and the emulator needs no network at all.
+
+To use Wi-Fi instead, all three of these are required:
+
+1. **Delete `dtoverlay=disable-wifi`** from `config.txt`. Miss this and the rest
+   does nothing — `wlan0` never appears, so correct credentials simply have no
+   interface to use, with no error to tell you.
+2. Fill in `dietpi-wifi.txt` on the FAT boot partition (SSID + key; editable from
+   any PC with the card inserted).
+3. Set `AUTO_SETUP_NET_WIFI_ENABLED=1` in `dietpi.txt`.
+
+Then reboot. On a running Pi, `sudo dietpi-config` → *Network Options: Adapters*
+does the same interactively. Check with `ip -brief addr` — you want a `wlan0`
+line with an address.
+
 Browsing to `\\<pi-ip>` needs share *enumeration*, which is a separate permission
 from reading the share — if that's denied while `\\<pi-ip>\X16` works, see the
 `[homes]` note in [setup-samba.sh](scripts/setup-samba.sh). Windows also caches
