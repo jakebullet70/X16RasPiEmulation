@@ -89,6 +89,16 @@ the Commander X16 emulator.
   only four keys, silently erasing anything else (`X16_SPLASH_SECONDS` was already
   affected). `smoke-test.sh` now fails if a key the appliance reads is missing
   from `save()`.
+- **HDMI mode now pinned in `config.txt`** (2026-07-25, confirmed on the TV): the
+  firmware had been deriving `video=` from whatever the TV answered at power-on
+  and falling back to `640x480`, which outranked the forced EDID. With
+  `hdmi_group=1` / `hdmi_mode=16` / `hdmi_force_hotplug=1` / `disable_fw_kms_setup=1`
+  there is no `video=` token at all and the connector offers only 1920x1080.
+- **Wi-Fi applier shipped** (2026-07-25): `x16-wifi.conf` on the FAT partition,
+  applied at boot by `x16-wifi-apply.service`, so an owner with no shell and no
+  network can set up Wi-Fi by editing a file on the card. Defers to
+  `dietpi-config` when the card hasn't changed. Association itself still untested
+  against a real AP — see `../TODO.md`.
 - **Dev Pi is current** (2026-07-25): reachable as `X16RasPi` / 192.168.1.193, the
   updated `custom.sh` is deployed and it boots into the X16 with `-joy1` and the
   full library. Previous appliance files backed up in `/root/x16-backup-*`.
