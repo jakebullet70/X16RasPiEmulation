@@ -72,7 +72,13 @@ disable_fw_kms_setup=1
 # See DOC/08-display-fixes.md for the full five-cause diagnosis.
 
 # --- Faster, cleaner boot ---
-disable_splash=1
+# disable_splash=0 KEEPS the firmware's rainbow test pattern. It was 1 (hidden)
+# through Phase 4 for a spotless boot, and deliberately turned back on: the
+# rainbow is the only thing that can appear before Linux exists (~1s), where the
+# firmware has no custom-image support. It gives the owner immediate proof the
+# machine is alive, and the X16 splash paints over it at ~2.7s anyway.
+# Set to 1 if you would rather have black until the branded splash.
+disable_splash=0
 boot_delay=0
 
 # --- Appliance: kill radios we don't use (removes boot text + speeds boot) ----

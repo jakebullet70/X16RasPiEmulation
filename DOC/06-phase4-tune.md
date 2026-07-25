@@ -60,8 +60,13 @@ thing no VM or Docker test could show you — it's why Phase 4 needs the real Pi
 Two sources of on-screen noise before the emulator paints: the firmware **rainbow
 splash** and the **kernel/console boot text + cursor**.
 
-1. **Rainbow splash** — `config.txt` already has `disable_splash=1` (Phase 1).
-   Confirm it's present.
+1. **Rainbow splash** — originally hidden with `disable_splash=1` (Phase 1).
+   **Reversed 2026-07-25: it is now `disable_splash=0`, i.e. the rainbow shows.**
+   Once boot-to-X16 came down to ~6 s, the remaining complaint was the *black*
+   period before anything appears. The firmware puts the rainbow up at ~1 s and
+   supports no custom image there, so it is the only possible feedback that
+   early; the branded splash paints over it at ~2.7 s. Set it back to `1` if you
+   prefer black until the branded splash.
 2. **Kernel log + cursor + console blanking** — append the tokens from
    `config/cmdline.txt.snippet` to the single line in `/boot/cmdline.txt`
    (or `/boot/firmware/cmdline.txt`): `quiet loglevel=0 logo.nologo
@@ -217,7 +222,7 @@ and write the end-user README for adding programs. See `07-phase5-harden-package
 |---|---|
 | Wrong resolution / black screen | Forced mode not applied — recheck `hdmi_group`/`hdmi_mode` in `config.txt`; ensure no `video=` in `cmdline.txt` overrides it. |
 | Tearing while scrolling | Mode/refresh mismatch — confirm active mode is exactly 60 Hz; try `hdmi_mode=4` (720p60) on a Pi 3. |
-| Rainbow splash still shows | `disable_splash=1` missing from `config.txt`. |
+| Rainbow splash shows | Intended since 2026-07-25 (`disable_splash=0`) — it is the only feedback possible at ~1 s. Set `disable_splash=1` for black until the branded splash. |
 | Boot text / cursor still flashes | `cmdline.txt` tokens not on the single line, or `custom.sh`'s `clear`/cursor-hide not running (check it's the deployed copy). |
 | Appliance won't boot after "quiet" | Temporarily drop `quiet`/`loglevel=0` to see the error, or SSH in and read `/var/log/x16-appliance.log`. |
 | Gamepad ignored | `X16_JOYSTICKS=0` in `x16.conf`, or the launcher isn't passing `-joyN` (r49 ignores pads without it — see 4.4). If the flag is there, SDL doesn't recognise the pad: needs an `SDL_GAMECONTROLLERCONFIG` mapping. |

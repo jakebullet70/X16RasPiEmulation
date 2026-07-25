@@ -59,7 +59,7 @@ sudo reboot
 
 ## ☐ Phase 4 — Tune
 - **HDMI:** `cat /sys/class/drm/card*-HDMI-A-*/modes` → confirm forced mode @60 Hz; load a scroller, check no tearing. (Pi 3 heavy? `hdmi_mode=4` = 720p60.)
-- **Silent boot:** confirm `disable_splash=1` (config.txt) + cmdline tokens applied → only the X16 ever on screen.
+- **Silent boot:** cmdline tokens applied → no kernel text/cursor. NB `disable_splash=0` is intentional: the firmware rainbow at ~1 s is the earliest possible feedback, and the branded splash covers it at ~2.7 s.
 - **Trim:** `systemd-analyze blame | head`; disable unused (`bluetooth`, `avahi-daemon`) — **keep SSH + networking**.
 - **Gamepad:** plug USB pad, test joystick; add r49 joystick flag to **both** `run-x16.sh` and `custom.sh`.
 > ### 🚩 GATE 4: 60 Hz locked + tear-free · boot visually silent · faster, no regression · gamepad persisted.
