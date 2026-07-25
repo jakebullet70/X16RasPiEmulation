@@ -17,32 +17,30 @@ Running list of what's outstanding. Status of what's *done* lives in
       Note this interacts with hardening — under a read-only root overlay,
       anything written to an ext4 fsroot does not survive reboot.
 
-- [ ] **An end user cannot set up Wi-Fi on the shipped image.** Verified on the
-      dev Pi 2026-07-25 — all three routes are dead ends:
-      1. `/etc/wpa_supplicant/wpa_supplicant.conf` is on ext4, mode 0600 —
-         invisible to a PC, so it needs the SSH access they don't have yet.
-      2. `dietpi-wifi.txt` *is* on FAT, but only `dietpi-firstboot.bash` (a
-         one-shot that disables itself) and `dietpi-wifidb` (interactive, via
-         `dietpi-config`) read it. A PiShrink clone has already run first-boot,
-         so edits do nothing. `dietpi-wifi-monitor.service` is a watchdog, not an
-         applier, and is disabled.
-      3. `dtoverlay=disable-wifi` means no `wlan0` regardless.
+- [ ] **The shipped image must not carry the dev Pi's Wi-Fi state.** The applier
+      exists now (`x16-wifi.conf` + `x16-wifi-apply.service`), but the image has
+      to ship with `X16_WIFI_SSID=` empty and **no** `.x16-wifi.state` /
+      `.x16-wifi.nohardware` stamp files on the FAT partition — a shipped stamp
+      would make the owner's first edit look "unchanged" and be ignored.
 
-      Fix should follow the `x16.conf` pattern: a FAT-resident file the appliance
-      re-reads every boot and applies when changed. Complication: `dtoverlay` is
-      read by firmware before userspace, so no boot hook can enable the radio for
-      the current boot. Either ship with the radio **enabled** (recommended — an
-      appliance shouldn't need network access to configure networking; costs a
-      little boot time and maybe console chatter, needs measuring), or ship
-      disabled and have the hook remove the overlay and reboot once, with a
-      loop guard.
+- [ ] **HDMI mode is not pinned in `config.txt`.** Found 2026-07-25: the dev Pi
+      has no `hdmi_group` / `hdmi_mode` / `hdmi_force_hotplug`, even though
+      `config.txt.snippet` contains them and DOC/06 §4.1 claims Phase 1 applied
+      them. Consequence: the *firmware* builds the `video=` token from whatever
+      it can read from the TV at power-on, and when the TV is off or slow it
+      falls back to `video=HDMI-A-1:640x480M@60`. That gets injected as a
+      cmdline mode which outranks the forced EDID — the appliance was observed
+      scanning out **640x480**. On a TV that rejects 640x480 DMT this is the
+      original black screen, back by another route. Needs the snippet's lines
+      applied, plus `disable_fw_kms_setup=1` on Pi 4 (the snippet notes the
+      firmware ignores `hdmi_mode` under full-KMS otherwise).
 
 ## Phase 5 — harden & package ([DOC/07](DOC/07-phase5-harden-package.md))
 
 - [ ] Clean the FAT partition before imaging — the dev Pi has accumulated
-      `config.txt.bak-{audio-310,disbt,quiet,x16}` and
-      `cmdline.txt.bak-{btquiet,edidfw,quiet}`, plus a Windows
-      `System Volume Information` folder. All would ship to end users.
+      `config.txt.bak-{audio-310,disbt,quiet,x16}`,
+      `cmdline.txt.bak-{btquiet,edidfw,quiet}`, `config.txt.bak-x16wifi`, plus a
+      Windows `System Volume Information` folder. All would ship to end users.
 
 - [ ] Harden the SD card: `log2ram` **or** read-only overlay. Then pull power
       mid-session several times and confirm it still boots clean.
@@ -68,9 +66,8 @@ Running list of what's outstanding. Status of what's *done* lives in
       the dev Pi the radio came up and the applier drove it correctly (interface
       detection, regulatory domain, rfkill, config generation, and the failure
       path all exercised), but association itself has never succeeded because
-      that Pi is Ethernet-only. Test on a Pi 3 too — different Wi-Fi chip.
-      Ethernet with the radio disabled in the device tree. The refusal path (no
-      `wlan0`) and the status view are verified; scan/join are not.
+      that Pi is Ethernet-only. Test on a Pi 3 too — different Wi-Fi chip
+      (BCM43438 / BCM43455 vs the Pi 4's), and slower firmware load.
 - [ ] Consider bundling `x16-gamepad-test` and `x16-wifi` into the shipped image,
       or leaving them as repo-only service tools.
 - [ ] `/usr/local/bin/x16-esc-test` exists on the dev Pi but is not in the repo —

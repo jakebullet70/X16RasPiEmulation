@@ -36,6 +36,26 @@ hdmi_force_hotplug=1        # output even if EDID read fails / TV off at boot
 hdmi_group=1               # 1 = CEA (TV modes)
 hdmi_mode=16               # 16 = 1080p 60Hz  (use 4 for 720p60 on a Pi 3 if needed)
 
+# THESE THREE ARE NOT OPTIONAL — VERIFIED ON HARDWARE 2026-07-25.
+# Without them the FIRMWARE derives the kernel's `video=` token from whatever
+# EDID it can read at power-on. With the TV off, asleep, or slow to answer it
+# falls back to:
+#     video=HDMI-A-1:640x480M@60
+# which the kernel injects as a cmdline mode that OUTRANKS the forced EDID. The
+# appliance was caught scanning out 640x480 — the exact DMT mode fussy TVs refuse,
+# i.e. the original black screen returning by a different route. It is invisible
+# on a tolerant TV, so it will not announce itself.
+#
+# On Pi 4 under full KMS the firmware IGNORES hdmi_group/hdmi_mode and injects its
+# own mode anyway, so the line below is what actually makes the three above win.
+# It stops the firmware handing the kernel a mode at all. Harmless on Pi 3.
+disable_fw_kms_setup=1
+#
+# Verify after boot — this should print NOTHING:
+#     grep -o 'video=[^ ]*' /proc/cmdline
+# and the connector should offer only your forced mode:
+#     sort -u /sys/class/drm/card1-HDMI-A-1/modes    # -> 1920x1080 only
+
 # --- Pi 4 KMS reality (2026-07-23) --------------------------------------------
 # On Pi 4 the FIRMWARE IGNORES hdmi_group/hdmi_mode under full-KMS and injects its
 # own EDID-preferred mode (video=HDMI-A-1:1920x1080M@60). The lines above still

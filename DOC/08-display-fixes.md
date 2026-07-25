@@ -62,7 +62,7 @@ waiting ~15 min on this TV's slow EDID read — the infamous "card1 appears at 9
   earlier, before `custom.sh` runs). Not required given the runtime override, but
   harmless. Confirm the connector name with `ls /sys/class/drm/` first.
 
-> ### Two traps in the cmdline-EDID path — both hit on real hardware 2026-07-25
+> ### Three traps in the forced-EDID path — all hit on real hardware 2026-07-25
 >
 > **1. The parameter is `drm.edid_firmware`, not `drm_kms_helper.edid_firmware`.**
 > It moved into the DRM core. On the Pi's 6.12 kernel the old name is rejected:
@@ -86,6 +86,20 @@ waiting ~15 min on this TV's slow EDID read — the infamous "card1 appears at 9
 > basic-audio and an LPCM SAD is **not** sufficient on its own. `gen_edid.py` now
 > emits the VSDB; the moment it did, ALSA opened first try with the EDID still
 > forced.
+>
+> **3. The firmware can override your forced EDID with 640x480.** The Pi's
+> firmware builds the kernel's `video=` token by reading the TV's EDID *before*
+> Linux starts — it knows nothing about `drm.edid_firmware`, which only fixes the
+> KERNEL's view. If the TV is off, asleep or slow to answer at power-on, the
+> firmware falls back to `video=HDMI-A-1:640x480M@60`, and the kernel injects
+> that as a cmdline mode which **outranks** the forced EDID. Caught on hardware
+> 2026-07-25 with the appliance scanning out 640x480 — the very DMT mode this
+> whole document exists to avoid. It is silent on a tolerant TV.
+> Fix: `hdmi_force_hotplug=1` + `hdmi_group=1` + `hdmi_mode=16`, **and**
+> `disable_fw_kms_setup=1` (on Pi 4 under full-KMS the firmware ignores the first
+> three otherwise). Verify with `grep -o 'video=[^ ]*' /proc/cmdline`, which
+> should print nothing at all.
+>
 
 ### 4. Black screen while the GPU was actually rendering
 `kmscube -D /dev/dri/card1` (a spinning-cube GLES test) **worked** — so GLES →
