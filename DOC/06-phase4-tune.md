@@ -136,8 +136,18 @@ Change the port count live over SSH with `x16-display` (option 5), or by editing
 - **Wrong buttons?** Same cause — a generic/incorrect SDL mapping. Fix it with a
   `SDL_GAMECONTROLLERCONFIG` entry rather than by changing `x16emu` flags.
 
-**Gate:** the gamepad drives the X16 joystick in a test program, and the setting
-lives in `x16.conf` so it survives a reboot.
+**Gate: PASSED on real hardware 2026-07-25.** A cheap SNES-style USB pad
+(`0810:e501`, "Personal Communication Systems") drives the X16 joystick. SDL maps
+it from its built-in table as "NEXT SNES Controller" — no extra mapping needed —
+and the only thing that had ever been missing was `-joy1`. Verified with
+`10 J=JOY(1) : PRINT J : GOTO 10` after a reboot, so the setting survives.
+
+`scripts/gamepad-test.sh` (installed as `x16-gamepad-test`) diagnoses any other
+pad: it lists what USB and the kernel see, then asks libSDL2 itself through
+`ctypes` whether `SDL_IsGameController()` is true — the exact test `x16emu`
+applies. Don't infer the answer by grepping GUIDs out of the library; SDL masks
+the GUID's CRC16 field and falls back to vendor/product matching, so a supported
+pad need not appear as an exact string.
 
 ---
 

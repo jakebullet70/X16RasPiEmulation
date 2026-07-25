@@ -26,8 +26,15 @@ boot_fat() {
   printf '%s\n' /boot
 }
 BOOT_FAT="$(boot_fat)"
-USER_PROG_DIR="${BOOT_FAT}/x16"
 CONF="${BOOT_FAT}/x16.conf"
+
+# Default fsroot is on FAT so programs can be added from any PC. But the FAT
+# partition is only ~128 MB: a big library (the community SD-card tree is ~250 MB)
+# cannot live there. Such a machine sets X16_FSROOT in x16.conf to point at the
+# roomy ext4 root instead, reachable over the Samba share rather than the card.
+X16_FSROOT=""
+[ -f "$CONF" ] && . "$CONF" 2>/dev/null
+USER_PROG_DIR="${X16_FSROOT:-${BOOT_FAT}/x16}"
 mkdir -p "$USER_PROG_DIR" 2>/dev/null
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') x16-appliance: $*" >> "$LOG"; }
@@ -134,6 +141,8 @@ while true; do
   X16_FORCE_EDID=1         # 1 = force TV mode; 0 = real EDID (VGA monitor)
   X16_JOYSTICKS=1          # SNES ports accepting a USB gamepad, 0..4
   [ -f "$CONF" ] && . "$CONF" 2>/dev/null
+  # fsroot may be repointed at the ext4 root for a library too big for FAT.
+  USER_PROG_DIR="${X16_FSROOT:-${BOOT_FAT}/x16}"
 
   apply_edid
 

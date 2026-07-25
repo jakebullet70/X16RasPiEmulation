@@ -13,7 +13,7 @@ CONF="/boot/firmware/x16.conf"
 # save(), which rewrites the whole file. A key that is read elsewhere but missing
 # here would be silently erased the first time someone opens this menu.
 X16_DISPLAY=widescreen; X16_SCALE=3; X16_OUTPUT=1080p; X16_FORCE_EDID=1
-X16_JOYSTICKS=1; X16_SPLASH_SECONDS=3
+X16_JOYSTICKS=1; X16_SPLASH_SECONDS=3; X16_FSROOT=""
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null
 
 save() {
@@ -33,6 +33,10 @@ X16_FORCE_EDID=$X16_FORCE_EDID
 X16_JOYSTICKS=$X16_JOYSTICKS
 # Seconds to hold the boot splash (0 = none).
 X16_SPLASH_SECONDS=$X16_SPLASH_SECONDS
+# Where the X16's files live. Empty = the x16 folder on this FAT partition, which
+# a PC can see. Set a path (e.g. /boot/x16) to use the ext4 root instead, for a
+# library too big for this ~128 MB partition — then add files over Samba/scp.
+X16_FSROOT=$X16_FSROOT
 EOF
 }
 
