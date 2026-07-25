@@ -235,6 +235,7 @@ plain-language README that ships with the finished image is
 | [06](DOC/06-phase4-tune.md) | Phase 4: lock 60 Hz, silence the boot, trim, gamepad |
 | [07](DOC/07-phase5-harden-package.md) | Phase 5: harden the SD card, capture the shippable image |
 | [08](DOC/08-display-fixes.md) | The black-screen post-mortem and the golden diagnostic path |
+| [09](DOC/09-bare-metal-review.md) | Bare metal revisited: what it would and wouldn't have saved us |
 
 ## Credits
 

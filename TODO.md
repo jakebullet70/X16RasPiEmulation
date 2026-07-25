@@ -49,10 +49,33 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Nice to have
 
-- [ ] Reclaim ~4.7 s of boot: `ifup@eth0` blocks `network.target`, which
-      `systemd-user-sessions` and therefore `getty@tty1` are ordered after. A
-      drop-in dropping that ordering would get boot-to-X16 from ~18 s to ~13 s,
-      at the cost of fighting Debian's default ordering.
+## Boot time (measured 2026-07-25 — bigger than previously thought)
+
+Boot-to-X16 is **20.3 s**, not the ~18 s previously recorded, and the earlier
+"~4.7 s from `ifup@eth0`" was a large underestimate — it is **14.9 s**.
+
+- [ ] **`serial-getty@ttyS0` stalls the boot for 90 s.** `dev-ttyS0.device` never
+      appears, so the job sits until it times out at 92.9 s, and only then do
+      `multi-user.target` / `graphical.target` activate. It does **not** delay the
+      X16 (tty1 is up at 20.3 s) but any unit ordered `WantedBy=multi-user.target`
+      waits a minute and a half, and a shipped image should not contain a
+      guaranteed 90 s timeout. Fix: mask `serial-getty@ttyS0.service`, and check
+      `cmdline.txt` isn't still asking for a serial console.
+- [ ] **Decouple `getty@tty1` from `network.target`** — the single biggest win.
+      `ifup@eth0` takes 14.9 s, almost all of it waiting for the router's
+      `DHCPOFFER` (request at 5.6 s, offer at 19.8 s — the Pi is idle, the router
+      is slow). `systemd-user-sessions` is ordered after `network.target` and
+      `getty@tty1` after that, so the X16 waits on DHCP for no reason. A drop-in
+      clearing that ordering should take boot-to-X16 to roughly 5-6 s.
+- [ ] Consider replacing the getty/autologin chain with a dedicated `x16.service`
+      (`After=sysinit.target`, `TTYPath=/dev/tty1`, conflicting with
+      `getty@tty1`). Removes agetty + login + shell profile from the path and is
+      deterministic. Trade-off: it steps outside `dietpi-autostart`, which is the
+      DietPi-supported mechanism — weigh against the coexistence rule.
+- [ ] Cheap trims once the above land: `X16_SPLASH_SECONDS=3` is 3 s of
+      deliberate delay before `x16emu`; `rpi-eeprom-update` 688 ms;
+      `keyboard-setup` 302 ms; FAT `systemd-fsck` 435 ms. Kernel itself is only
+      1.77 s, so there is little left below that.
 - [ ] `x16-wifi` / `x16-wifi-apply` are untested against a REAL access point. On
       the dev Pi the radio came up and the applier drove it correctly (interface
       detection, regulatory domain, rfkill, config generation, and the failure

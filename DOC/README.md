@@ -32,6 +32,11 @@ the Commander X16 emulator.
   the SD card against power-cut corruption (`log2ram` or read-only overlay), then
   capture a shrunk, auto-expanding `.img` (`dd` + PiShrink) and ship an end-user
   README — the distributable "distro" deliverable.
+- **[09-bare-metal-review.md](09-bare-metal-review.md)** — Revisits the Option B
+  (BMC64-style bare-metal) question now that Option A is built and debugged on
+  hardware: which of our display bugs bare metal would actually have prevented,
+  what it simplifies (storage, power-cut hardening), what it throws away, and why
+  stripping the Linux boot is the better-value path if boot speed is the goal.
 - **[08-display-fixes.md](08-display-fixes.md)** — The real-hardware "black screen"
   saga: five stacked causes (boot race, missing Mesa userspace, TV-won't-sync-DMT,
   desktop-GL renderer draws black, sizing toggle) with the golden diagnostic path
