@@ -4,6 +4,11 @@
 *.img.gz
 *.zip
 
+# Generated splash blobs (6.4 MB of build artifacts).
+# Regenerate with tools/make-splash-assets.sh; all three must be in the image.
+splash-out/
+*.raw
+
 # Python
 __pycache__/
 *.pyc

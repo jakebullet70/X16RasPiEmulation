@@ -121,11 +121,18 @@ export SDL_VIDEODRIVER=kmsdrm
 # The GLES2 renderer (same path kmscube uses) is the one that actually shows.
 export SDL_RENDER_DRIVER=opengles2
 
-# Locate the connected HDMI connector and its DRM card minor (Pi3/Pi4 safe).
+# Locate a connected display and its DRM card minor (Pi3/Pi4 safe).
+#
+# HDMI is listed first so it stays preferred, but ANY connected connector is
+# accepted: the Pi 3 + VGA HAT setup drives DPI-1 and has no HDMI connector at
+# all. Waiting specifically for HDMI there would burn the full 30s timeout below
+# on every boot before the emulator starts. A non-matching glob stays literal
+# and fails the -e test, so the fallback costs nothing when HDMI is present.
 CONN_SYS=""; CONN_NAME=""; CARD=""
-find_hdmi() {
-  for s in /sys/class/drm/card*-HDMI-A-*; do
+find_display() {
+  for s in /sys/class/drm/card*-HDMI-A-* /sys/class/drm/card*-*; do
     [ -e "$s/status" ] || continue
+    case "$s" in *Writeback*) continue ;; esac   # not a real output
     [ "$(cat "$s/status" 2>/dev/null)" = connected ] || continue
     CONN_SYS="$s"
     CONN_NAME=$(basename "$s" | sed 's/^card[0-9]*-//')
@@ -139,7 +146,7 @@ find_hdmi() {
 # "SDL_Init failed: kmsdrm not available" during early boot.
 i=0
 while [ $i -lt 30 ]; do
-  { [ -e /dev/dri/card0 ] || [ -e /dev/dri/card1 ]; } && find_hdmi && break
+  { [ -e /dev/dri/card0 ] || [ -e /dev/dri/card1 ]; } && find_display && break
   i=$((i + 1)); sleep 1
 done
 
@@ -168,7 +175,11 @@ apply_edid() {
     [ -r "$p" ] || continue
     [ -n "$(cat "$p" 2>/dev/null)" ] && return 0
   done
-  find_hdmi || return 0
+  find_display || return 0
+  # Forcing an EDID only makes sense on HDMI. A VGA HAT drives DPI, which has no
+  # EDID at all — the panel takes whatever mode it is given — so skip rather than
+  # write into a connector that cannot use it.
+  case "$CONN_NAME" in HDMI-A-*) ;; *) return 0 ;; esac
   ov="/sys/kernel/debug/dri/${CARD}/${CONN_NAME}/edid_override"
   [ -e "$ov" ] || return 0
   case "${X16_OUTPUT:-1080p}" in

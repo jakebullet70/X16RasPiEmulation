@@ -121,6 +121,43 @@ Remaining, optional:
 - [ ] Still untested on a **Pi 3** — different Wi-Fi chip (BCM43438 / BCM43455
       vs the Pi 4's) and slower firmware load, so the "interface appeared after
       Ns" path may behave differently.
+
+## Pi 3 test — prep DONE 2026-07-25, hardware run outstanding
+
+Two things that would have failed silently on the bench are fixed already:
+
+- [x] **Splash blobs for 720p and 640x480.** `x16-splash` skips a blob whose
+      size doesn't match the framebuffer (drawing it would garble the screen),
+      so a Pi 3 at 720p, or on a VGA HAT at 640x480, would simply have shown
+      black with nothing in any log. All three sizes now selected automatically
+      by framebuffer geometry; regenerate with
+      [`tools/make-splash-assets.sh`](tools/make-splash-assets.sh). Selection
+      verified against injected geometries for 1080p / 720p / 480p, plus the
+      two safe-skip cases (unknown size, 32bpp).
+- [x] **`custom.sh` no longer waits specifically for HDMI.** A VGA HAT drives
+      DPI and presents no HDMI connector at all, so the old `find_hdmi` would
+      have burned the full 30 s timeout on *every* boot before starting the
+      emulator. `find_display` still prefers HDMI, accepts any connected
+      connector, and skips Writeback. EDID forcing is now HDMI-only — DPI has
+      no EDID to override.
+
+Still to do on the hardware itself:
+
+- [ ] Pi 3B/3B+, micro-USB 2.5 A PSU (not USB-C), full-size HDMI (not micro).
+      Keep Ethernet plugged in throughout — every fix this week came via SSH.
+- [ ] Run `scripts/trim-boot.sh`, but **check `serial-getty` first**: on a Pi 3
+      `ttyS0` may be a genuine console rather than the not-ready mini-UART it is
+      on the Pi 4. The script tests udev readiness rather than existence, so it
+      should do the right thing — confirm that it does.
+- [ ] Decide 1080p vs 720p by eye (`hdmi_mode=4`, `X16_OUTPUT=720p`,
+      `x16-720p.edid`), then re-check HDMI **audio** — it has broken silently
+      once already when the mode changed.
+- [ ] VGA HAT path: `X16_FORCE_EDID=0`, and confirm the appliance starts
+      promptly rather than after a 30 s wait (the fix above).
+- [ ] Fold this into the Phase 5 gate — DOC/07 already requires flashing the
+      shrunk image to a blank card and booting a *second* Pi. Doing that on the
+      Pi 3 covers both jobs and tests the "single arm64 image for both models"
+      claim the whole design rests on.
 - [ ] Untested: an AP that is genuinely absent or has a wrong passphrase now
       that the apply path works. The "keep the stamp, let wpa_supplicant retry"
       design has never been exercised against a real failure.
