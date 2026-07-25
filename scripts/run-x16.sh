@@ -12,7 +12,19 @@
 set -euo pipefail
 
 INSTALL_DIR="/opt/x16"
-USER_PROG_DIR="/boot/x16"
+
+# -fsroot lives on the FAT boot partition (Bookworm: /boot/firmware, older
+# images: /boot) so programs can be added from any PC via the SD card.
+boot_fat() {
+  for d in /boot/firmware /boot; do
+    case "$(stat -f -c %T "$d" 2>/dev/null)" in
+      msdos|vfat|exfat) printf '%s\n' "$d"; return 0 ;;
+    esac
+  done
+  printf '%s\n' /boot
+}
+USER_PROG_DIR="${X16_FSROOT:-$(boot_fat)/x16}"
+mkdir -p "${USER_PROG_DIR}" 2>/dev/null || true
 
 # Optional shared config (same file the appliance reads). Defaults follow.
 X16_DISPLAY="widescreen"

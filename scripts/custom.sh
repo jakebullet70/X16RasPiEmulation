@@ -11,9 +11,24 @@
 # so `x16-display` (the SSH tool) only has to edit the conf and `pkill x16emu`.
 
 INSTALL_DIR="/opt/x16"
-USER_PROG_DIR="/boot/x16"
 LOG="/var/log/x16-appliance.log"
-CONF="/boot/firmware/x16.conf"
+
+# Both the config and the user-program dir (-fsroot) live on the FAT boot
+# partition so they are editable by putting the SD card in any PC. Bookworm
+# mounts it at /boot/firmware; older images use /boot. (Plain /boot on Bookworm
+# is ext4 root — invisible to Windows — so probe rather than hard-code.)
+boot_fat() {
+  for d in /boot/firmware /boot; do
+    case "$(stat -f -c %T "$d" 2>/dev/null)" in
+      msdos|vfat|exfat) printf '%s\n' "$d"; return 0 ;;
+    esac
+  done
+  printf '%s\n' /boot
+}
+BOOT_FAT="$(boot_fat)"
+USER_PROG_DIR="${BOOT_FAT}/x16"
+CONF="${BOOT_FAT}/x16.conf"
+mkdir -p "$USER_PROG_DIR" 2>/dev/null
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') x16-appliance: $*" >> "$LOG"; }
 

@@ -95,7 +95,7 @@ The most common packaging failure is shipping an image that boots on *your* card
 but not a fresh one. Flash the shrunk image to a **different, blank SD card**,
 boot a Pi from it, and re-run the Phase 3 gate:
 - powers on to the X16 fullscreen, keyboard + audio work,
-- a `.prg` dropped on `/boot/x16` from a PC loads,
+- a `.prg` dropped on `/boot/firmware/x16` from a PC loads,
 - root partition auto-expanded (`df -h /`), overlay/log2ram still active.
 
 **Gate (package):** the shrunk `.img.gz`, flashed to a blank card, reproduces the
@@ -105,8 +105,11 @@ full appliance on a second Pi.
 
 ## Part C — End-user README (ships with the image)
 
-Write a short, non-technical README to distribute alongside `x16-appliance-r49.img.gz`.
-It should cover only what a user needs:
+**Written — see [`dist/README-end-user.md`](../dist/README-end-user.md).** Ship it
+alongside `x16-appliance-r49.img.gz`. Re-check it against the final image before
+release (especially the FAT drive's label and free space, which the user sees).
+
+It covers only what a user needs:
 
 1. **Flash it** — Raspberry Pi Imager → "Use custom image" → the `.img.gz` → your
    SD card. Pi 3 or Pi 4.

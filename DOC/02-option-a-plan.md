@@ -49,7 +49,7 @@ Power on → DietPi (no desktop, autologin tty1)
   `/var/lib/dietpi/dietpi-autostart/custom.sh`.
 - In that script: export `SDL_VIDEODRIVER=kmsdrm`, set CPU governor to
   `performance`, then a relaunch loop calling
-  `x16emu -fullscreen -fsroot /boot/x16 ...`.
+  `x16emu -fullscreen -fsroot /boot/firmware/x16 ...`.
 
 ### `config.txt` essentials
 

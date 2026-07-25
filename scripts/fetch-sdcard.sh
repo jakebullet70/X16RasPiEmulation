@@ -12,23 +12,42 @@
 #
 # INSTALL:  sudo install -m 0755 ~/scripts/fetch-sdcard.sh /usr/local/bin/x16-fetch-sd
 #
+# HEADS UP ON SPACE: the default fsroot is on the FAT boot partition (~128 MB on
+# a stock DietPi image) and this repo is a few hundred MB. The whole tree will NOT
+# fit. Either cherry-pick what you want, or use --dest to put the library on the
+# roomy ext4 root (then reach it over the Samba share, not the SD card).
+#
 # USAGE:
-#   x16-fetch-sd                 # merge repo contents into /boot/x16 (keeps your files)
-#   x16-fetch-sd --clean         # wipe /boot/x16 first, then fresh copy
-#   x16-fetch-sd --dest DIR      # target a different fsroot
+#   x16-fetch-sd                 # merge repo contents into the fsroot (keeps your files)
+#   x16-fetch-sd --clean         # wipe the fsroot first, then fresh copy
+#   x16-fetch-sd --dest DIR      # target a different fsroot (e.g. /opt/x16-library)
 #   x16-fetch-sd --repo USER/REPO [--branch BR]   # a different GitHub source
+#   x16-fetch-sd --force         # proceed even if the destination looks too small
 #
 set -euo pipefail
 
+# Same FAT-boot probe the other scripts use — keep the default fsroot in step.
+boot_fat() {
+  for d in /boot/firmware /boot; do
+    case "$(stat -f -c %T "$d" 2>/dev/null)" in
+      msdos|vfat|exfat) printf '%s\n' "$d"; return 0 ;;
+    esac
+  done
+  printf '%s\n' /boot
+}
+
 REPO="cx16forum/sdcard"
 BRANCH="HEAD"            # HEAD = the repo's default branch (no need to know its name)
-DEST="/boot/x16"        # the emulator -fsroot (matches custom.sh USER_PROG_DIR)
+DEST="${X16_FSROOT:-$(boot_fat)/x16}"   # the emulator -fsroot (matches custom.sh)
 SUBDIR="sdcard_root"    # the folder inside the repo that maps to the SD root
 CLEAN=0
+FORCE=0
+NEED_MB=700             # tarball + extracted tree, with headroom
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --clean)  CLEAN=1; shift ;;
+    --force)  FORCE=1; shift ;;
     --dest)   DEST="${2:?}"; shift 2 ;;
     --repo)   REPO="${2:?}"; shift 2 ;;
     --branch) BRANCH="${2:?}"; shift 2 ;;
@@ -43,6 +62,26 @@ echo "Source : ${REPO}@${BRANCH}  (${SUBDIR}/)"
 echo "Dest   : ${DEST}"
 
 mkdir -p "$DEST"
+
+# Refuse to fill a small FAT boot partition: the temp tarball lands next to DEST
+# (same filesystem), so we need room for BOTH it and the extracted tree.
+FREE_MB=$(df -Pm "$DEST" | awk 'NR==2 {print $4}')
+if [ "${FREE_MB:-0}" -lt "$NEED_MB" ] && [ "$FORCE" = 0 ]; then
+  cat >&2 <<EOF
+ERROR: ${DEST} has only ${FREE_MB} MB free; this library needs roughly ${NEED_MB} MB.
+
+The default fsroot is on the FAT boot partition, which is deliberately small so
+that programs can be dropped on it from any PC — it is not sized for the whole
+community library. Options:
+
+  * copy over just the titles you want (SD card in your PC, or the Samba share)
+  * put the library on the ext4 root instead:
+        x16-fetch-sd --dest /opt/x16-library
+    and point the emulator at it with X16_FSROOT=/opt/x16-library
+  * ignore this check:  x16-fetch-sd --force
+EOF
+  exit 1
+fi
 
 # Download to a temp file on the SAME filesystem as DEST (avoids filling a small
 # tmpfs /tmp with a ~300 MB tarball). Verify it's actually a gzip before extract.

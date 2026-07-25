@@ -9,7 +9,18 @@ set -euo pipefail
 # ---- config -----------------------------------------------------------------
 X16_VER="r49"                                    # git tag; keep emu+ROM in lockstep
 INSTALL_DIR="/opt/x16"
-USER_PROG_DIR="/boot/x16"
+
+# -fsroot on the FAT boot partition (Bookworm: /boot/firmware, older: /boot) so
+# programs can be added from any PC via the SD card. See install-x16.sh.
+boot_fat() {
+  for d in /boot/firmware /boot; do
+    case "$(stat -f -c %T "$d" 2>/dev/null)" in
+      msdos|vfat|exfat) printf '%s\n' "$d"; return 0 ;;
+    esac
+  done
+  printf '%s\n' /boot
+}
+USER_PROG_DIR="${X16_FSROOT:-$(boot_fat)/x16}"
 ROM_BASE="https://github.com/X16Community/x16-rom/releases/download/${X16_VER}"
 ROM_ZIP="Release.${X16_VER^^}.ROM.Image.zip"
 # -----------------------------------------------------------------------------

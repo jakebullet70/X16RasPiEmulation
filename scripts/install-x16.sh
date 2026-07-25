@@ -16,7 +16,22 @@ set -euo pipefail
 # ---- config -----------------------------------------------------------------
 X16_VER="r49"                                   # bump to update (keep emu+ROM in lockstep)
 INSTALL_DIR="/opt/x16"                           # where x16emu + rom.bin live
-USER_PROG_DIR="/boot/x16"                        # drop .prg/.bas here from any PC
+
+# The user-program dir (-fsroot) MUST live on the FAT boot partition, so the
+# owner can add .prg/.bas files by popping the SD card into any PC. Bookworm
+# mounts that partition at /boot/firmware; older images use /boot. NB: /boot on
+# Bookworm is plain ext4 root — invisible to Windows — which is why we probe for
+# the real FAT mount instead of hard-coding a path.
+boot_fat() {
+  for d in /boot/firmware /boot; do
+    case "$(stat -f -c %T "$d" 2>/dev/null)" in
+      msdos|vfat|exfat) printf '%s\n' "$d"; return 0 ;;
+    esac
+  done
+  printf '%s\n' /boot                            # last resort (VM/container test beds)
+}
+BOOT_FAT="$(boot_fat)"
+USER_PROG_DIR="${X16_FSROOT:-${BOOT_FAT}/x16}"   # drop .prg/.bas here from any PC
 EMU_BASE="https://github.com/X16Community/x16-emulator/releases/download/${X16_VER}"
 ROM_BASE="https://github.com/X16Community/x16-rom/releases/download/${X16_VER}"
 ROM_ZIP="Release.${X16_VER^^}.ROM.Image.zip"     # e.g. Release.R49.ROM.Image.zip
@@ -76,6 +91,21 @@ fi
 echo ">> [6/6] Creating user program dir and launcher symlink..."
 $SUDO mkdir -p "${USER_PROG_DIR}"
 $SUDO ln -sf "${INSTALL_DIR}/x16emu" /usr/local/bin/x16emu
+
+# Migrate from the pre-FAT layout: earlier revisions used /boot/x16 on the ext4
+# root, which a PC cannot see. Move any programs left there to the new fsroot.
+OLD_PROG_DIR="/boot/x16"
+if [ "${OLD_PROG_DIR}" != "${USER_PROG_DIR}" ] && [ -d "${OLD_PROG_DIR}" ] &&
+   [ -n "$(ls -A "${OLD_PROG_DIR}" 2>/dev/null)" ]; then
+  echo "   migrating existing programs from ${OLD_PROG_DIR} -> ${USER_PROG_DIR}"
+  $SUDO cp -an "${OLD_PROG_DIR}/." "${USER_PROG_DIR}/" 2>/dev/null || true
+  echo "   (originals left in ${OLD_PROG_DIR}; delete them once you've checked)"
+fi
+
+if [ "${USER_PROG_DIR#/boot}" = "${USER_PROG_DIR}" ]; then
+  echo "!! WARNING: ${USER_PROG_DIR} is not on the FAT boot partition, so programs"
+  echo "   cannot be added by putting the SD card in a PC. Expected /boot/firmware/x16."
+fi
 
 echo
 echo ">> Installed x16emu ${X16_VER} to ${INSTALL_DIR}"

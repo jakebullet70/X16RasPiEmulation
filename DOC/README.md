@@ -54,6 +54,8 @@ the Commander X16 emulator.
   editable from any PC).
 - `../tools/gen_edid.py` — generates the forced 1080p-only CEA EDID
   (`x16-1080p.edid`) that fixes the black-screen-on-DMT problem.
+- `../dist/README-end-user.md` — the plain-language README that ships alongside
+  the distributable `.img.gz` (Phase 5 Part C).
 
 ## Status
 
@@ -64,6 +66,12 @@ the Commander X16 emulator.
   `/opt/x16`, X16 boots fullscreen with working keyboard. Phase 3 autostart deployed.
 - **Black-screen saga solved** — five stacked display causes diagnosed and fixed;
   the fixes are now baked into the repo scripts/config (see `08-display-fixes.md`).
+- **`-fsroot` moved to the FAT boot partition** (2026-07-25): it was `/boot/x16`
+  on the ext4 root, which a PC cannot see — so the documented "drop files on the
+  card from any PC" workflow never actually worked. Now `/boot/firmware/x16`
+  (scripts probe for the real FAT mount). `install-x16.sh` migrates anything left
+  in the old location.
+- **End-user README written** (`../dist/README-end-user.md`) — Phase 5 Part C.
 - **Resume point:** deploy the baked-in fix stack + forced EDID to the Pi, reboot,
   confirm power-on → X16 visible, then Phase 4 (tune) + Phase 5 (harden + package).
 - Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro.

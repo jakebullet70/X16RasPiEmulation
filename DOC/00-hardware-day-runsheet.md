@@ -31,7 +31,7 @@ dmesg | grep -i vc4      # vc4/drm messages, no fallback-to-fbdev
 ```bash
 # copy scripts to the Pi (scp/git/USB), then:
 chmod +x ~/scripts/*.sh
-~/scripts/install-x16.sh          # SDL2 + x16emu r49 + rom.bin -> /opt/x16, makes /boot/x16
+~/scripts/install-x16.sh          # SDL2 + x16emu r49 + rom.bin -> /opt/x16, makes /boot/firmware/x16
 #   fallback if binary won't run:  ~/scripts/build-x16-from-source.sh
 ```
 **At the physical console, NOT SSH:**
@@ -39,8 +39,8 @@ chmod +x ~/scripts/*.sh
 ~/scripts/run-x16.sh              # -> fullscreen X16 "READY."
 ```
 Check: video fullscreen 60 Hz no tearing · keyboard types · audio out HDMI
-(`aplay -l` → `/etc/asound.conf` if silent) · drop a `.prg` on `/boot/x16` → `DIR`/`LOAD` sees it.
-> ### 🚩 GATE 2: X16 boots to READY. fullscreen from console; keyboard + audio work; `/boot/x16` file loads.
+(`aplay -l` → `/etc/asound.conf` if silent) · drop a `.prg` on `/boot/firmware/x16` → `DIR`/`LOAD` sees it.
+> ### 🚩 GATE 2: X16 boots to READY. fullscreen from console; keyboard + audio work; `/boot/firmware/x16` file loads.
 
 ## ☐ Phase 3 — Appliance (power-on → X16, no shell)
 ```bash

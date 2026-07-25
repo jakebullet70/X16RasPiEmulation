@@ -87,6 +87,7 @@ DOC/        phase runbooks, research, and the display-fixes post-mortem
 config/     boot-partition snippets + appliance settings and systemd units
 scripts/    install / launch / autostart / maintenance shell scripts
 tools/      EDID and splash-image generators (Python) and their output
+dist/       what ships to end users alongside the .img.gz
 ```
 
 ### `scripts/`
@@ -101,7 +102,7 @@ tools/      EDID and splash-image generators (Python) and their output
 | [appliance-quiet.sh](scripts/appliance-quiet.sh) | Silences the boot so only the X16 is ever on screen |
 | [x16-splash.sh](scripts/x16-splash.sh) | Paints the boot splash straight to `/dev/fb0` |
 | [fetch-sdcard.sh](scripts/fetch-sdcard.sh) | Populates the `-fsroot` with the community SD-card tree (games, demos, BASIC) |
-| [setup-samba.sh](scripts/setup-samba.sh) | Shares `/boot/x16` on the LAN so you can drag-drop `.PRG`/`.BAS` files |
+| [setup-samba.sh](scripts/setup-samba.sh) | Shares the program folder on the LAN so you can drag-drop `.PRG`/`.BAS` files without pulling the card |
 | [smoke-test.sh](scripts/smoke-test.sh) | Headless install/launch check for a VM, container, or CI |
 
 ### `config/`
@@ -125,9 +126,15 @@ blob that `x16-splash.sh` writes to the framebuffer.
 
 ## Using the finished appliance
 
-- **Load your own programs:** put `.PRG` / `.BAS` files in `/boot/x16` on the Pi,
-  then `DIR` and `LOAD` see them from BASIC. `setup-samba.sh` exposes that folder
-  as `\\<pi>\X16` over the network for drag-and-drop.
+- **Load your own programs:** power off, put the SD card in any PC, and drop
+  `.PRG` / `.BAS` files into the `x16/` folder on the small FAT drive that
+  appears. `DIR` and `LOAD` then see them from BASIC. To add programs without
+  pulling the card, `setup-samba.sh` exposes the same folder as `\\<pi>\X16`.
+  On the Pi that folder is `/boot/firmware/x16` — note that on Bookworm
+  `/boot/firmware` is the FAT partition and plain `/boot` is ext4 root, so the
+  scripts probe for the real FAT mount rather than assuming. It's small
+  (~128 MB), sized for a personal selection rather than the whole community
+  library.
 - **Change the picture:** `sudo x16-display` over SSH — switch between widescreen
   and authentic 4:3, change scale or output resolution, toggle the forced EDID.
   Changes apply on the emulator's next relaunch, no reboot.
@@ -135,7 +142,9 @@ blob that `x16-splash.sh` writes to the framebuffer.
 
 ## Documentation
 
-Full index with per-document summaries: [DOC/README.md](DOC/README.md).
+Full index with per-document summaries: [DOC/README.md](DOC/README.md). The
+plain-language README that ships with the finished image is
+[dist/README-end-user.md](dist/README-end-user.md).
 
 | Doc | Topic |
 | --- | --- |

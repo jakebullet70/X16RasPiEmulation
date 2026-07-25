@@ -70,7 +70,7 @@ chmod +x ~/scripts/*.sh
 ```
 This installs SDL2, downloads the prebuilt `x16emu_linux-aarch64-r49.zip` to
 `/opt/x16`, ensures a matching `rom.bin` is present (auto-fetching the r49 ROM if
-the emulator zip didn't bundle it), creates `/boot/x16` for user programs, and
+the emulator zip didn't bundle it), creates `/boot/firmware/x16` for user programs, and
 symlinks `x16emu` into `PATH`.
 
 > Fallback: if the prebuilt binary won't run (wrong arch / old glibc), use
@@ -95,7 +95,7 @@ Quick checks:
   from any PC; inside the X16 it's visible via the `-fsroot` mount (`LOAD`/`DIR`).
 
 **Gate:** X16 boots to READY. fullscreen from the console, keyboard + audio work,
-and a file placed in `/boot/x16` is reachable from within the emulator.
+and a file placed in `/boot/firmware/x16` is reachable from within the emulator.
 
 ---
 

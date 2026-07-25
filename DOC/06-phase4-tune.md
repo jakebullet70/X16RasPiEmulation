@@ -128,10 +128,17 @@ reflected in `custom.sh` so it survives a reboot.
 This is how end users get their `.prg`/`.bas` files onto the machine, so make sure
 it's frictionless before packaging.
 
-- `custom.sh` / `run-x16.sh` point `-fsroot` at `/boot/x16`. `/boot` is the FAT
-  partition, so it mounts on any PC when the SD card is inserted.
+- `custom.sh` / `run-x16.sh` point `-fsroot` at `/boot/firmware/x16`. On Bookworm
+  **`/boot/firmware` is the FAT partition** — the one that mounts on any PC when
+  the SD card is inserted. (Plain `/boot` is ext4 root and is *not* visible to a
+  PC; an earlier revision of these scripts used `/boot/x16` and got this wrong.)
+  The scripts probe for the real FAT mount, falling back to `/boot` on pre-Bookworm
+  images, so both layouts work.
 - Drop a `.prg` into that `x16/` folder from another PC, boot the Pi, and confirm
   `DIR` lists it and `LOAD"NAME"` + `RUN` works inside the X16.
+- Space check: the FAT partition is small (~128 MB on a stock image). It's sized
+  for a personal selection of programs, not the whole community library — see
+  `fetch-sdcard.sh --dest` if you want the big collection on the ext4 root.
 
 **Gate:** a file dropped on the FAT partition from a PC is visible and loadable in
 the X16 with no in-emulator setup.
