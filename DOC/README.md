@@ -92,6 +92,16 @@ the Commander X16 emulator.
   own files one level down — and `SAVE` writes back through the mount onto the
   card. Implemented as `drop_attach()` in `custom.sh` and verified on hardware,
   including the negative cases; `X16_DROP_DIR` names the folder (`FAT-FILES`).
+- **Boot is settled** (2026-07-25): **39 s → 23 s** power-on to `READY.` on the
+  owner's stopwatch; x16emu launches 6.3 s after kernel start, down from 13.1 s.
+  Four fixes, all measured: `getty@tty1` no longer ordered behind
+  `network.target` (it was waiting on DHCP), `getty@tty1`'s `Type=idle` 5 s
+  stall removed, `serial-getty@ttyS0` disabled (a 90 s timeout every boot), and
+  the splash hold cut to 1 s. The branded splash now paints at 2.7 s on the
+  firmware's pre-KMS framebuffer, with the rainbow deliberately re-enabled at
+  ~1 s. Reproduced by [`scripts/trim-boot.sh`](../scripts/trim-boot.sh) +
+  [`config/x16-splash-early.service`](../config/x16-splash-early.service).
+  What's left is firmware time and the TV's own sync delay — not ours to fix.
 - **The library moved to `/mnt/x16`** (2026-07-25). It had been `/boot/x16`, which
   is actively misleading: on Bookworm `/boot` is the ext4 root while the card's
   FAT partition is `/boot/firmware`, so the name implied "on the card, visible
