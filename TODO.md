@@ -49,9 +49,18 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Nice to have
 
-## Boot time — DONE 2026-07-25 (20.3 s → 3.3 s to the X16)
+## Boot time — DONE 2026-07-25 (x16emu launch 13.1 s → 6.2 s since kernel start)
 
-Both fixes applied on the dev Pi and captured in
+Owner-reported wall clock, power-on to `READY.`: **39 s → 30 s** before the last
+two fixes below; expect roughly 23 s after. The gap between "6 s since kernel
+start" and the stopwatch is firmware/EEPROM before the kernel plus the TV's own
+sync/input-switch delay — neither is ours to fix, and the TV is likely the
+larger of the two.
+
+Instrumented timeline (`/var/log/x16-appliance.log`, seconds since kernel start):
+`getty@tty1` 3.2 → `custom.sh` entered 5.0 → display ready 5.1 → launch 6.2.
+
+All fixes applied on the dev Pi and captured in
 [`scripts/trim-boot.sh`](scripts/trim-boot.sh) (idempotent, `--revert`
 supported). **Must be run when building the image.**
 
@@ -62,16 +71,21 @@ supported). **Must be run when building the image.**
       It had been waiting out a 90 s device timeout every boot, so
       `multi-user.target` didn't activate until 92.9 s. Total boot is now ~16 s
       instead of ~93 s, and nothing blocks the X16.
+- [x] **`getty@tty1` `Type=idle` removed — a flat 5 s.** systemd holds an idle
+      unit's `ExecStart` until the job queue drains or 5 s pass, so a login
+      prompt doesn't interleave with boot messages. tty1 here is the emulator,
+      not a prompt (`agetty -l custom.sh`), and the queue never drains early
+      because DHCP runs to ~14 s — so it always paid the full 5 s. Found only
+      after instrumenting `custom.sh`: the unit was active at 3.2 s but the
+      script wasn't entered until 9.9 s.
+- [x] `X16_SPLASH_SECONDS` 3 → 1.
 
 Remaining, optional:
 
-- [ ] `X16_SPLASH_SECONDS=3` is now the single largest delay before the `READY.`
-      prompt — 3 s of deliberate hold on a 3.3 s boot. Reconsider (1 s?) now that
-      there is no long wait for it to cover.
-- [ ] A dedicated `x16.service` (`After=basic.target`, `TTYPath=/dev/tty1`) would
-      drop agetty + login + shell profile from the path — maybe 0.5–1 s more, and
-      more deterministic. Trade-off: steps outside `dietpi-autostart`, which is
-      DietPi's supported mechanism. Low value now that the big win is banked.
+- [ ] ~1.7 s still passes between `getty@tty1` activating (3.2 s) and `custom.sh`
+      being entered (5.0 s) — agetty startup. Probably where a dedicated
+      `x16.service` would help, but it steps outside `dietpi-autostart`, which is
+      DietPi's supported mechanism. Small, and the big wins are banked.
 - [ ] Cheap trims: `rpi-eeprom-update` 688 ms, `keyboard-setup` 302 ms, FAT
       `systemd-fsck` 435 ms. Kernel is 1.66 s, so ~3 s is close to the floor.
 - [ ] **Static IP is not needed for boot speed** and should NOT ship in the

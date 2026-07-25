@@ -40,6 +40,12 @@ mkdir -p "$USER_PROG_DIR" 2>/dev/null
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') x16-appliance: $*" >> "$LOG"; }
 
+# Seconds since kernel start. The wall clock is useless for boot analysis here:
+# it jumps when timesyncd corrects it, which made an early measurement come out
+# negative. Everything boot-related is logged against the monotonic clock.
+up() { cut -d' ' -f1 /proc/uptime; }
+log "custom.sh entered at $(up)s since boot"
+
 # ---- PC-visible drop folder -------------------------------------------------
 # The FAT partition is small (512 MB in the shipped image); the bundled library
 # is ~250 MB and lives on the roomy ext4 root. x16emu accepts only ONE -fsroot,
@@ -189,7 +195,8 @@ clear 2>/dev/null
 # this is the reliable draw — the early x16-splash.service is just a bonus). Hold
 # it briefly so it is actually visible before x16emu's KMS modeset paints over it.
 # Tunable via X16_SPLASH_SECONDS in x16.conf (0 = no splash/hold).
-X16_SPLASH_SECONDS="${X16_SPLASH_SECONDS:-3}"
+log "display ready at $(up)s since boot"
+X16_SPLASH_SECONDS="${X16_SPLASH_SECONDS:-1}"
 if [ "$X16_SPLASH_SECONDS" != 0 ] && [ -x /usr/local/bin/x16-splash ]; then
   /usr/local/bin/x16-splash 2>/dev/null
   sleep "$X16_SPLASH_SECONDS"
@@ -231,7 +238,7 @@ while true; do
   esac
 
   AUDIO_DRIVER="$AUDIO_DRIVER_DEFAULT"
-  log "launch: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} joy=${X16_JOYSTICKS} args='${VIDEO_ARGS}${JOY_ARGS}'"
+  log "launch at $(up)s since boot: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} joy=${X16_JOYSTICKS} args='${VIDEO_ARGS}${JOY_ARGS}'"
 
   START=$(cut -d. -f1 /proc/uptime)
   SDL_AUDIODRIVER="$AUDIO_DRIVER" "${INSTALL_DIR}/x16emu" \

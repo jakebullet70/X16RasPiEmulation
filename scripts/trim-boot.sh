@@ -1,8 +1,10 @@
 #!/bin/bash
 #
-# trim-boot.sh — take the appliance's boot-to-X16 from ~20s to ~3.5s.
+# trim-boot.sh — take the appliance's boot-to-X16 from ~13s to ~6s.
 #
-# Two independent fixes, both measured on a Pi 4 (DietPi Bookworm, 2026-07-25):
+# Three independent fixes, all measured on a Pi 4 (DietPi Bookworm, 2026-07-25).
+# Timings are seconds since KERNEL start; firmware/EEPROM time before that, and
+# the TV's own sync delay after it, are not included and are not ours to fix.
 #
 #   1. getty@tty1 — where the X16 actually starts — was ordered behind
 #      network.target, which waits for ifup@eth0, which waits for the router's
@@ -29,6 +31,8 @@ done
 
 if [ "${1:-}" = --revert ]; then
   rm -f "$OVERRIDE"
+  rm -f /etc/systemd/system/getty@tty1.service.d/10-no-idle-delay.conf
+  rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
   systemctl enable serial-getty@ttyS0.service 2>/dev/null || true
   systemctl daemon-reload
   echo "Reverted. (A console=ttyS0 token removed from cmdline.txt is NOT restored;"
@@ -78,7 +82,25 @@ if [ -n "$CMDLINE" ] && grep -q 'console=ttyS0' "$CMDLINE"; then
   echo "removed console=ttyS0 from ${CMDLINE} (backup: ${CMDLINE}.bak-serialconsole)"
 fi
 
+# ---- 3. drop getty@tty1's Type=idle 5s stall -------------------------------
+# getty@tty1 ships Type=idle so a login prompt doesn't interleave with boot
+# messages: systemd holds ExecStart until the job queue drains or 5s elapse.
+# On this appliance tty1 is not a login prompt -- agetty runs custom.sh via -l --
+# and the queue never drains early because DHCP runs to ~14s, so it always paid
+# the full 5s. Measured: unit active at 3.2s, custom.sh not entered until 9.9s.
+# Type is a plain setting, not an ordering dependency, so a drop-in is fine here.
+IDLE_DIR=/etc/systemd/system/getty@tty1.service.d
+mkdir -p "$IDLE_DIR"
+cat > "${IDLE_DIR}/10-no-idle-delay.conf" <<'CONF'
+# X16 appliance: tty1 runs the emulator, not a login prompt. Type=idle costs a
+# flat 5s here. See scripts/trim-boot.sh.
+[Service]
+Type=simple
+CONF
+echo "installed: ${IDLE_DIR}/10-no-idle-delay.conf"
+
 systemctl daemon-reload
 echo
-echo "Done. Reboot, then check:  systemd-analyze critical-chain getty@tty1.service"
-echo "Expect getty@tty1 at ~3.3s instead of ~20s."
+echo "Done. Reboot, then check the instrumented log:"
+echo "  grep -E 'entered|launch at' /var/log/x16-appliance.log | tail -2"
+echo "Expect custom.sh entered at ~5s and x16emu launched at ~6s (was ~13s)."
