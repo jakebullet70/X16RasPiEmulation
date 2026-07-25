@@ -25,6 +25,7 @@
 set -uo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/x16}"
+GCDB="${INSTALL_DIR}/gamecontrollerdb.txt"   # extra mappings the launchers load
 DEVS=/proc/bus/input/devices
 found_pad=0
 mapped_pad=0
@@ -93,16 +94,12 @@ while IFS= read -r line || [ -n "$line" ]; do
       else
         guid="$(guid_from "$1" "$2" "$3" "$4")"
         say "        SDL GUID: ${guid}"
-        if [ -z "$SDL_SO" ]; then
-          say "        -> can't check: libSDL2 not found (is SDL2 installed?)"
-        elif ! command -v strings >/dev/null 2>&1; then
-          say "        -> can't check: 'strings' missing (apt-get install binutils)"
-        elif strings -a "$SDL_SO" 2>/dev/null | grep -qi "$guid"; then
-          say "        -> MAPPED: libSDL2 has a built-in game-controller mapping."
-          mapped_pad=1
-        else
-          say "        -> NOT in libSDL2's built-in table. x16emu will ignore it"
-          say "           unless you supply a mapping (see section 4)."
+        # NB: deliberately no verdict here. Grepping the GUID out of libSDL2 is
+        # unreliable — SDL masks the CRC16 field and falls back to vendor/product
+        # matching, so a pad SDL handles fine can be absent as an exact string.
+        # Section 3 asks SDL itself, which is the only answer that counts.
+        if [ -f "$GCDB" ] && grep -qi "^${guid}" "$GCDB" 2>/dev/null; then
+          say "        (also present in ${GCDB##*/})"
         fi
       fi
       say
@@ -118,9 +115,52 @@ if [ "$found_pad" = 0 ]; then
   say
 fi
 
-# --------------------------------------------------- 3. does the appliance ask
+# -------------------------------------------- 3. ask SDL itself (ground truth)
 rule
-say "3. Does the appliance actually enable a port?"
+say "3. What SDL reports (this is the answer that decides it)"
+rule
+# x16emu binds a pad only when SDL_IsGameController() is true. Rather than infer
+# that, call into the very libSDL2 the emulator links against, via ctypes — no
+# compiler, no display, changes nothing. python3 ships with DietPi.
+if command -v python3 >/dev/null 2>&1; then
+  SDL_OUT="$(SDL_GAMECONTROLLERCONFIG_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-$GCDB}" \
+             SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python3 - <<'PY'
+import ctypes, sys
+try:
+    sdl = ctypes.CDLL("libSDL2-2.0.so.0")
+except OSError as e:
+    print("   can't load libSDL2:", e); sys.exit(0)
+sdl.SDL_GetError.restype = ctypes.c_char_p
+sdl.SDL_JoystickNameForIndex.restype = ctypes.c_char_p
+sdl.SDL_GameControllerNameForIndex.restype = ctypes.c_char_p
+sdl.SDL_GameControllerMappingForDeviceIndex.restype = ctypes.c_char_p
+if sdl.SDL_Init(0x00002000) != 0:            # SDL_INIT_GAMECONTROLLER
+    print("   SDL_Init failed:", sdl.SDL_GetError().decode()); sys.exit(0)
+n = sdl.SDL_NumJoysticks()
+print(f"   SDL sees {n} joystick device(s)")
+for i in range(n):
+    jn = sdl.SDL_JoystickNameForIndex(i)
+    gc = bool(sdl.SDL_IsGameController(i))
+    print(f"     [{i}] {jn.decode() if jn else '?'}")
+    if gc:
+        cn = sdl.SDL_GameControllerNameForIndex(i)
+        print(f"         OK-MAPPED: SDL maps it as \"{cn.decode() if cn else '?'}\"")
+    else:
+        print("         NO-MAPPING: x16emu will ignore this pad")
+sdl.SDL_Quit()
+PY
+)"
+  printf '%s\n' "$SDL_OUT"
+  case "$SDL_OUT" in *OK-MAPPED:*) mapped_pad=1 ;; esac
+else
+  say "   python3 not available — cannot ask SDL directly."
+  say "   (Kernel-level detection above is only half the story.)"
+fi
+say
+
+# --------------------------------------------------- 4. does the appliance ask
+rule
+say "4. Does the appliance actually enable a port?"
 rule
 CONF=""
 for c in /boot/firmware/x16.conf /boot/x16.conf; do [ -r "$c" ] && { CONF="$c"; break; }; done
@@ -147,7 +187,7 @@ say
 
 # ------------------------------------------------------------------ 4. verdict
 rule
-say "4. Verdict / what to do next"
+say "5. Verdict / what to do next"
 rule
 if [ "$found_pad" = 1 ] && [ "$mapped_pad" = 1 ]; then
   say "   Looks good. Test it for real AT THE CONSOLE (not over SSH):"
@@ -159,18 +199,15 @@ if [ "$found_pad" = 1 ] && [ "$mapped_pad" = 1 ]; then
   say "   In BASIC, read joystick 1 and move the stick:"
   say "       10 J=JOY(1) : PRINT J : GOTO 10"
 elif [ "$found_pad" = 1 ]; then
-  say "   The pad works as a joystick but SDL has no built-in mapping, so"
-  say "   x16emu will ignore it. Give SDL a mapping:"
+  say "   The pad works as a joystick but has no game-controller mapping, so"
+  say "   x16emu ignores it. Install the community mapping database:"
   say
-  say "     1. Grab the community database:"
-  say "          curl -fLo /opt/x16/gamecontrollerdb.txt \\"
-  say "            https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/master/gamecontrollerdb.txt"
-  say "     2. Find your GUID (printed above) in that file."
-  say "     3. Export the matching line for the appliance, e.g. in custom.sh"
-  say "        before the loop:"
-  say "          export SDL_GAMECONTROLLERCONFIG=\"<the line from the db>\""
+  say "       sudo curl -fLo ${GCDB} \\"
+  say "         https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/master/gamecontrollerdb.txt"
   say
-  say "   If the GUID isn't in the database either, generate a mapping by hand"
+  say "   The launchers point SDL at that file automatically (via"
+  say "   SDL_GAMECONTROLLERCONFIG_FILE), so re-run this check afterwards —"
+  say "   most cheap USB pads are in there. If yours isn't, generate a mapping"
   say "   with SDL's 'controllermap' utility on any desktop machine."
 else
   say "   Nothing to test yet -- the kernel isn't seeing a joystick."

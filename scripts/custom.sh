@@ -40,6 +40,13 @@ printf '\033[?25l' 2>/dev/null   # hide cursor early too
 
 # Render straight to HDMI via SDL2's KMSDRM backend.
 export SDL_VIDEODRIVER=kmsdrm
+
+# Teach SDL about pads that aren't in its built-in mapping table. Without a
+# mapping SDL_IsGameController() is false and x16emu ignores the pad entirely,
+# even with -joyN — a cheap SNES-style USB pad (0810:e501) hits this. SDL reads
+# this file itself (2.0.10+); missing file is harmless.
+[ -f "${INSTALL_DIR}/gamecontrollerdb.txt" ] &&
+  export SDL_GAMECONTROLLERCONFIG_FILE="${INSTALL_DIR}/gamecontrollerdb.txt"
 # CRITICAL: on Pi4 KMS, SDL's default desktop-GL renderer draws a BLACK frame.
 # The GLES2 renderer (same path kmscube uses) is the one that actually shows.
 export SDL_RENDER_DRIVER=opengles2

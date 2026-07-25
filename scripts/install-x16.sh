@@ -88,7 +88,20 @@ else
   echo "   rom.bin already bundled — good."
 fi
 
-echo ">> [6/6] Creating user program dir and launcher symlink..."
+echo ">> [6/6] Fetching SDL controller mappings, user program dir, symlink..."
+# SDL only exposes a pad to x16emu if it has a game-controller mapping; its
+# built-in table misses plenty of cheap USB pads (e.g. the SNES-style 0810:e501).
+# This community database covers them. Non-fatal: no network, no gamepad support.
+GCDB_URL="https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/master/gamecontrollerdb.txt"
+if curl -fL --retry 2 "$GCDB_URL" -o "${tmp}/gamecontrollerdb.txt" 2>/dev/null &&
+   [ -s "${tmp}/gamecontrollerdb.txt" ]; then
+  $SUDO cp "${tmp}/gamecontrollerdb.txt" "${INSTALL_DIR}/gamecontrollerdb.txt"
+  echo "   controller mappings: $(wc -l < "${tmp}/gamecontrollerdb.txt") entries"
+else
+  echo "   WARNING: could not fetch controller mappings; pads outside SDL's"
+  echo "            built-in table will be ignored. Re-run when online."
+fi
+
 $SUDO mkdir -p "${USER_PROG_DIR}"
 $SUDO ln -sf "${INSTALL_DIR}/x16emu" /usr/local/bin/x16emu
 

@@ -46,6 +46,10 @@ export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
 export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 # Force the GLES2 renderer — the desktop-GL default scans out BLACK on Pi4 KMS.
 export SDL_RENDER_DRIVER="${SDL_RENDER_DRIVER:-opengles2}"
+# Extra controller mappings for pads missing from SDL's built-in table (see
+# custom.sh). Keep in step with the appliance so both launchers behave alike.
+[ -f "${INSTALL_DIR}/gamecontrollerdb.txt" ] &&
+  export SDL_GAMECONTROLLERCONFIG_FILE="${INSTALL_DIR}/gamecontrollerdb.txt"
 
 # Display sizing from config (authentic 4:3 pillarbox vs stretch-to-fill 16:9).
 DISPLAY_ARGS=(-scale "${X16_SCALE}")
