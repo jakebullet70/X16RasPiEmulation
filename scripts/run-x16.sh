@@ -29,6 +29,7 @@ mkdir -p "${USER_PROG_DIR}" 2>/dev/null || true
 # Optional shared config (same file the appliance reads). Defaults follow.
 X16_DISPLAY="widescreen"
 X16_SCALE="3"
+X16_JOYSTICKS="1"
 for c in /boot/firmware/x16.conf /boot/x16.conf; do
   if [ -r "$c" ]; then
     # shellcheck disable=SC1090
@@ -52,9 +53,19 @@ if [ "${X16_DISPLAY}" = "widescreen" ]; then
   DISPLAY_ARGS=(-widescreen "${DISPLAY_ARGS[@]}")
 fi
 
+# r49 will NOT bind a plugged-in gamepad unless the port is enabled with -joyN
+# (Joystick_slots_enabled[] defaults to all-false), so pass one per port wanted.
+# Keep this in step with custom.sh so manual and appliance launches behave alike.
+JOY_ARGS=()
+case "${X16_JOYSTICKS}" in
+  1|2|3|4) for ((n = 1; n <= X16_JOYSTICKS; n++)); do JOY_ARGS+=("-joy${n}"); done ;;
+  *) ;;                    # 0 or unset -> gamepads ignored
+esac
+
 exec "${INSTALL_DIR}/x16emu" \
   -fullscreen \
   -rom "${INSTALL_DIR}/rom.bin" \
   -fsroot "${USER_PROG_DIR}" \
   "${DISPLAY_ARGS[@]}" \
+  ${JOY_ARGS[@]+"${JOY_ARGS[@]}"} \
   "$@"

@@ -9,16 +9,30 @@ CONF="/boot/firmware/x16.conf"
 [ -w "$(dirname "$CONF")" ] || { echo "Run as root (sudo x16-display)."; exit 1; }
 
 # ---- defaults, then load current config ----
+# NB: every key the appliance understands must be defaulted AND written back by
+# save(), which rewrites the whole file. A key that is read elsewhere but missing
+# here would be silently erased the first time someone opens this menu.
 X16_DISPLAY=widescreen; X16_SCALE=3; X16_OUTPUT=1080p; X16_FORCE_EDID=1
+X16_JOYSTICKS=1; X16_SPLASH_SECONDS=3
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null
 
 save() {
   cat > "$CONF" <<EOF
-# Commander X16 appliance — display settings. Edit or run: x16-display
+# Commander X16 appliance — settings. Edit here, or run: x16-display
+# Sourced by /bin/dash — keep it POSIX (KEY=value, no spaces around '=').
+
+# Aspect: widescreen (fill 16:9) | authentic (true 4:3, pillar-boxed)
 X16_DISPLAY=$X16_DISPLAY
+# Render scale, 1-4.
 X16_SCALE=$X16_SCALE
+# Output resolution: 1080p | 720p
 X16_OUTPUT=$X16_OUTPUT
+# 1 = force a TV-friendly mode via synthetic EDID; 0 = real EDID (VGA monitor).
 X16_FORCE_EDID=$X16_FORCE_EDID
+# SNES ports accepting a USB gamepad, 0-4 (0 = gamepads ignored).
+X16_JOYSTICKS=$X16_JOYSTICKS
+# Seconds to hold the boot splash (0 = none).
+X16_SPLASH_SECONDS=$X16_SPLASH_SECONDS
 EOF
 }
 
@@ -42,12 +56,14 @@ banner() {
   Scale       : $X16_SCALE
   Resolution  : $X16_OUTPUT
   Force TV mode: $([ "$X16_FORCE_EDID" = 1 ] && echo yes || echo "no (VGA/real EDID)")
+  Gamepad ports: $([ "$X16_JOYSTICKS" = 0 ] && echo "none" || echo "$X16_JOYSTICKS")
 ----------------------------------------
   1) Aspect    (widescreen <-> authentic 4:3)
   2) Scale     (1-4)
   3) Resolution(1080p <-> 720p)
   4) Force TV mode on/off  (off = real VGA monitor, needs reboot)
-  5) Apply now  (restart X16)
+  5) Gamepad ports (0-4)   (0 = ignore pads; r49 needs a port per pad)
+  6) Apply now  (restart X16)
   q) Quit
 ========================================
 EOF
@@ -64,10 +80,12 @@ while true; do
     3) [ "$X16_OUTPUT" = 1080p ] && X16_OUTPUT=720p || X16_OUTPUT=1080p ;;
     4) [ "$X16_FORCE_EDID" = 1 ] && X16_FORCE_EDID=0 || X16_FORCE_EDID=1
        [ "$X16_FORCE_EDID" = 0 ] && { echo "Real-EDID mode: reboot for a VGA monitor."; sleep 2; } ;;
-    5) restart_x16; sleep 2 ;;
+    5) printf "gamepad ports 0-4> "; read -r j
+       case "$j" in 0|1|2|3|4) X16_JOYSTICKS=$j ;; *) echo "invalid"; sleep 1 ;; esac ;;
+    6) restart_x16; sleep 2 ;;
     q|Q) save; echo "Saved to $CONF."; exit 0 ;;
     *) ;;
   esac
   # auto-apply the quick toggles immediately so the change is visible
-  case "$choice" in 1|2|3) restart_x16; sleep 1 ;; esac
+  case "$choice" in 1|2|3|5) restart_x16; sleep 1 ;; esac
 done

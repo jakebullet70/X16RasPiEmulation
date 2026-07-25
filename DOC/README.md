@@ -72,6 +72,14 @@ the Commander X16 emulator.
   (scripts probe for the real FAT mount). `install-x16.sh` migrates anything left
   in the old location.
 - **End-user README written** (`../dist/README-end-user.md`) — Phase 5 Part C.
+- **Gamepad wired up** (2026-07-25): r49 ignores pads unless `-joyN` enables the
+  port (verified in the r49 `src/joystick.c` source), so both launchers now pass
+  it, driven by `X16_JOYSTICKS` in `x16.conf`. Doc 06 §4.4 corrected — it had
+  claimed no flag was needed. **Untested on hardware with an actual pad.**
+- **`x16-display` no longer eats settings**: its `save()` rewrote `x16.conf` with
+  only four keys, silently erasing anything else (`X16_SPLASH_SECONDS` was already
+  affected). `smoke-test.sh` now fails if a key the appliance reads is missing
+  from `save()`.
 - **Resume point:** deploy the baked-in fix stack + forced EDID to the Pi, reboot,
   confirm power-on → X16 visible, then Phase 4 (tune) + Phase 5 (harden + package).
 - Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro.

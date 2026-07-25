@@ -125,6 +125,7 @@ while true; do
   X16_SCALE=3              # integer render scale 1..4
   X16_OUTPUT=1080p         # 1080p | 720p
   X16_FORCE_EDID=1         # 1 = force TV mode; 0 = real EDID (VGA monitor)
+  X16_JOYSTICKS=1          # SNES ports accepting a USB gamepad, 0..4
   [ -f "$CONF" ] && . "$CONF" 2>/dev/null
 
   apply_edid
@@ -132,12 +133,25 @@ while true; do
   VIDEO_ARGS="-fullscreen -scale ${X16_SCALE}"
   [ "$X16_DISPLAY" = widescreen ] && VIDEO_ARGS="${VIDEO_ARGS} -widescreen"
 
+  # r49 ignores a plugged-in gamepad unless its port is explicitly enabled:
+  # Joystick_slots_enabled[] starts all-false and joystick_add() skips disabled
+  # slots. So -joyN is REQUIRED, not optional. Harmless when no pad is attached.
+  JOY_ARGS=""
+  case "$X16_JOYSTICKS" in
+    1|2|3|4) n=1
+             while [ "$n" -le "$X16_JOYSTICKS" ]; do
+               JOY_ARGS="${JOY_ARGS} -joy${n}"; n=$((n + 1))
+             done ;;
+    *) ;;                  # 0 or garbage -> no gamepad support
+  esac
+
   AUDIO_DRIVER="$AUDIO_DRIVER_DEFAULT"
-  log "launch: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} args='${VIDEO_ARGS}'"
+  log "launch: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} joy=${X16_JOYSTICKS} args='${VIDEO_ARGS}${JOY_ARGS}'"
 
   START=$(cut -d. -f1 /proc/uptime)
   SDL_AUDIODRIVER="$AUDIO_DRIVER" "${INSTALL_DIR}/x16emu" \
     ${VIDEO_ARGS} \
+    ${JOY_ARGS} \
     -rom "${INSTALL_DIR}/rom.bin" \
     -fsroot "${USER_PROG_DIR}" \
     >> "$LOG" 2>&1

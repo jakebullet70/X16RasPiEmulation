@@ -74,6 +74,7 @@ the useful ones are:
   shape with black bars at the sides.
 - `X16_SCALE` — how large the picture is drawn.
 - `X16_OUTPUT` — `1080p` or `720p`.
+- `X16_JOYSTICKS` — how many gamepads to accept, `0` to `4`.
 
 Save the file, eject, and boot the Pi to see the change.
 
@@ -85,6 +86,7 @@ Save the file, eject, and boot the Pi to see the change.
 | Screen stays black after the splash | Some TVs need a moment — give it 30 seconds. If it's still black, set `X16_OUTPUT=720p` in `x16.conf` (see section 5). |
 | No sound | Turn up the TV. Sound only comes out of the HDMI display, not the Pi's headphone socket. |
 | Keyboard does nothing | Use a plain wired USB keyboard for the first test; some wireless dongles need a moment after power-on. |
+| Gamepad does nothing | Plug it in before switching on. If it's still ignored, check `X16_JOYSTICKS` is not `0` in `x16.conf` (section 5). Unusual controllers may simply not be recognised. |
 | `DIR` doesn't show my files | They must be inside the `x16` folder on the small drive, not loose at its top level. Check the filenames end in `.PRG` or `.BAS`. |
 | It won't start at all | Re-flash the image (section 1). If that fails too, the SD card may be worn out — they do wear out. Try another card. |
 

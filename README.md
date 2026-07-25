@@ -136,8 +136,13 @@ blob that `x16-splash.sh` writes to the framebuffer.
   (~128 MB), sized for a personal selection rather than the whole community
   library.
 - **Change the picture:** `sudo x16-display` over SSH — switch between widescreen
-  and authentic 4:3, change scale or output resolution, toggle the forced EDID.
-  Changes apply on the emulator's next relaunch, no reboot.
+  and authentic 4:3, change scale or output resolution, toggle the forced EDID,
+  set the gamepad port count. Changes apply on the emulator's next relaunch, no
+  reboot. Same settings are editable as [x16.conf](config/x16.conf) on the FAT
+  partition from any PC.
+- **Gamepads:** plug in before power-on. r49 ignores a pad unless its port is
+  enabled with `-joyN`, so the launchers pass one flag per port, driven by
+  `X16_JOYSTICKS` (0–4, default 1).
 - **Appliance log:** `/var/log/x16-appliance.log`.
 
 ## Documentation

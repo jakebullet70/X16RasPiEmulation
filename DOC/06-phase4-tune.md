@@ -107,19 +107,37 @@ audio, `-fsroot`, relaunch all still pass the Phase 3 gate).
 
 ## 4.4 Map a USB gamepad to the X16 joystick
 
-SDL2 auto-detects USB game controllers; `x16emu` maps a detected controller to the
-X16's joystick with no extra config for common pads. Plug one in and test in a
-program that reads the joystick.
+> **Corrected 2026-07-25.** An earlier draft of this section said `x16emu` maps a
+> detected controller with no extra config. It does **not**. Verified against the
+> r49 source (`src/joystick.c`): `Joystick_slots_enabled[]` initialises to all
+> `false`, and `joystick_add()` skips every disabled slot — so with no `-joyN`
+> flag a plugged-in pad is opened and then ignored. **The flag is required.**
 
-- **Pad not recognized / wrong buttons?** `x16emu` accepts controller options —
-  check `x16emu --help` for the current joystick/gamepad flags on r49 and add them
-  to the launch line in **both** `scripts/run-x16.sh` (manual) and
-  `scripts/custom.sh` (appliance) so manual and autostart behave identically.
-- SDL uses its built-in controller DB; a very obscure pad may need an
-  `SDL_GAMECONTROLLERCONFIG` mapping exported in `custom.sh` before the loop.
+r49 exposes four bare flags, one per SNES controller port — `-joy1` `-joy2`
+`-joy3` `-joy4`. They take no argument; each simply enables that port to accept a
+pad. Enabling a port with nothing plugged in costs nothing.
 
-**Gate:** the gamepad drives the X16 joystick in a test program; the mapping is
-reflected in `custom.sh` so it survives a reboot.
+Both launchers now pass them, driven by `X16_JOYSTICKS` in `x16.conf` (0–4,
+default 1), so manual and appliance launches behave identically:
+
+```bash
+# what the appliance ends up running, with X16_JOYSTICKS=2:
+x16emu -fullscreen -widescreen -scale 3 -joy1 -joy2 -rom ... -fsroot ...
+```
+
+Change the port count live over SSH with `x16-display` (option 5), or by editing
+`x16.conf` from any PC with the SD card in it.
+
+- **Pad still ignored?** SDL only offers a device to the emulator if
+  `SDL_IsGameController()` is true — i.e. the pad is in SDL's controller
+  database. A very obscure pad needs an `SDL_GAMECONTROLLERCONFIG` mapping
+  exported in `custom.sh` before the loop; generate one with SDL's
+  `controllermap` utility or the community `gamecontrollerdb.txt`.
+- **Wrong buttons?** Same cause — a generic/incorrect SDL mapping. Fix it with a
+  `SDL_GAMECONTROLLERCONFIG` entry rather than by changing `x16emu` flags.
+
+**Gate:** the gamepad drives the X16 joystick in a test program, and the setting
+lives in `x16.conf` so it survives a reboot.
 
 ---
 
@@ -165,4 +183,4 @@ and write the end-user README for adding programs. See `07-phase5-harden-package
 | Rainbow splash still shows | `disable_splash=1` missing from `config.txt`. |
 | Boot text / cursor still flashes | `cmdline.txt` tokens not on the single line, or `custom.sh`'s `clear`/cursor-hide not running (check it's the deployed copy). |
 | Appliance won't boot after "quiet" | Temporarily drop `quiet`/`loglevel=0` to see the error, or SSH in and read `/var/log/x16-appliance.log`. |
-| Gamepad ignored | Confirm SDL sees it (`SDL_VIDEODRIVER` unrelated); add the r49 joystick flag to both `run-x16.sh` and `custom.sh`. |
+| Gamepad ignored | `X16_JOYSTICKS=0` in `x16.conf`, or the launcher isn't passing `-joyN` (r49 ignores pads without it — see 4.4). If the flag is there, SDL doesn't recognise the pad: needs an `SDL_GAMECONTROLLERCONFIG` mapping. |
