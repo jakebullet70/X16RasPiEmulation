@@ -24,6 +24,7 @@ set -u
 
 LOG=/var/log/x16-appliance.log
 WPA_CONF=/etc/wpa_supplicant/wpa_supplicant.conf
+INTERFACES=/etc/network/interfaces
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') x16-wifi-apply: $*" >> "$LOG" 2>/dev/null; }
 
@@ -172,11 +173,36 @@ mkdir -p "$(dirname "$WPA_CONF")"
 chmod 600 "$WPA_CONF"
 log "wrote ${WPA_CONF} for SSID '${X16_WIFI_SSID}' (country ${X16_WIFI_COUNTRY})"
 
+# systemd's wpa_supplicant@<iface> template reads a PER-INTERFACE file name, not
+# the one above. Without this copy the unit starts, fails 260ms later with
+# "Failed to open config file .../wpa_supplicant-wlan0.conf", and -- because
+# `systemctl restart` still reports success for a unit that dies after starting
+# -- the ifup fallback below never ran. Found on hardware: radio up, config
+# written, nothing associated.
+cp "$WPA_CONF" "/etc/wpa_supplicant/wpa_supplicant-${IFACE}.conf" 2>/dev/null &&
+  chmod 600 "/etc/wpa_supplicant/wpa_supplicant-${IFACE}.conf"
+
+# --- let the interface actually come up ---------------------------------------
+# ifupdown owns wlan0 here: the /etc/network/interfaces stanza carries the
+# `wpa-conf` line. But DietPi COMMENTS OUT `allow-hotplug wlan0` when Wi-Fi is
+# disabled, and nothing else un-does it -- so the radio comes up and then
+# nothing ever launches wpa_supplicant. Mirrors the disable-wifi overlay
+# handling above: the owner edited the card, so this is their explicit intent.
+if [ -f "$INTERFACES" ] &&
+   grep -qE "^[[:space:]]*#[[:space:]]*allow-hotplug[[:space:]]+${IFACE}" "$INTERFACES"; then
+  cp "$INTERFACES" "${INTERFACES}.bak-x16wifi"
+  sed -i "s/^[[:space:]]*#[[:space:]]*\(allow-hotplug[[:space:]]\+${IFACE}\)/\1/" "$INTERFACES"
+  log "enabled 'allow-hotplug ${IFACE}' in ${INTERFACES}"
+fi
+
 # --- apply --------------------------------------------------------------------
 if ! wpa_cli -i "$IFACE" reconfigure >/dev/null 2>&1; then
-  systemctl restart "wpa_supplicant@${IFACE}" >/dev/null 2>&1 ||
-    systemctl restart wpa_supplicant >/dev/null 2>&1 ||
-    ifup "$IFACE" >/dev/null 2>&1
+  # Backgrounded on purpose. Association takes ~2s but the DHCP lease took 21s
+  # on the test AP, and this unit runs before network-pre.target -- blocking
+  # here would hold up the emulator for the whole lease negotiation.
+  ifdown "$IFACE" >/dev/null 2>&1
+  ( ifup "$IFACE" >/dev/null 2>&1 & ) ||
+    systemctl restart "wpa_supplicant@${IFACE}" >/dev/null 2>&1
 fi
 
 # Give it a moment, then make sure we have an address (DHCP).

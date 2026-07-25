@@ -107,12 +107,23 @@ Remaining, optional:
       wanted on a dev unit, prefer a DHCP reservation on the router over editing
       `/etc/network/interfaces` — no pool collision, survives re-imaging, and no
       risk of locking yourself out of a headless Pi.
-- [ ] `x16-wifi` / `x16-wifi-apply` are untested against a REAL access point. On
-      the dev Pi the radio came up and the applier drove it correctly (interface
-      detection, regulatory domain, rfkill, config generation, and the failure
-      path all exercised), but association itself has never succeeded because
-      that Pi is Ethernet-only. Test on a Pi 3 too — different Wi-Fi chip
-      (BCM43438 / BCM43455 vs the Pi 4's), and slower firmware load.
+- [x] **`x16-wifi-apply` tested against a real AP (2026-07-25) — and it did not
+      work first time.** Two bugs, both fixed and re-verified from a clean
+      "owner" state (radio disabled, `allow-hotplug` commented, no stamp):
+      the applier now un-comments `allow-hotplug wlan0` (DietPi comments it out
+      when Wi-Fi is disabled, so the radio came up but nothing ever launched
+      `wpa_supplicant`), and it writes the per-interface
+      `wpa_supplicant-<iface>.conf` that systemd's template unit actually reads.
+      The old code's `systemctl restart wpa_supplicant@wlan0` reported *success*
+      for a unit that died 260 ms later, so the `ifup` fallback never ran.
+      Result: associates unaided at boot, DHCP lease, routes to the internet,
+      and the emulator still launches at 6.6 s.
+- [ ] Still untested on a **Pi 3** — different Wi-Fi chip (BCM43438 / BCM43455
+      vs the Pi 4's) and slower firmware load, so the "interface appeared after
+      Ns" path may behave differently.
+- [ ] Untested: an AP that is genuinely absent or has a wrong passphrase now
+      that the apply path works. The "keep the stamp, let wpa_supplicant retry"
+      design has never been exercised against a real failure.
 - [ ] Consider bundling `x16-gamepad-test` and `x16-wifi` into the shipped image,
       or leaving them as repo-only service tools.
 - [ ] `/usr/local/bin/x16-esc-test` exists on the dev Pi but is not in the repo —
