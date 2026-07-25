@@ -100,8 +100,35 @@ sudo systemctl disable --now avahi-daemon 2>/dev/null     # mDNS not needed for 
 - Don't chase milliseconds by disabling networking/SSH — you'll want that door
   for updates (Phase 5 is easier with it).
 
-**Gate:** measurably faster power-on-to-`READY.` with no lost function (keyboard,
-audio, `-fsroot`, relaunch all still pass the Phase 3 gate).
+**Gate: PASSED 2026-07-25.** Power-on to X16 measured at **18 s** (was 20 s), with
+keyboard, audio, gamepad, `-fsroot` and relaunch all intact.
+
+Measure it like this — `systemd-analyze` is misleading here:
+
+```bash
+UP=$(cut -d. -f1 /proc/uptime); AGE=$(ps -o etimes= -p "$(pgrep -x x16emu)" | tr -d ' ')
+echo "boot-to-X16: $((UP-AGE))s"
+```
+
+> **Ignore `systemd-analyze`'s headline number.** It reports ~1 min 32 s on this
+> appliance, but nothing is actually waiting: `getty@tty1` (the X16's parent)
+> starts at 8.3 s, no unit enters active late, and the journal is empty between
+> 78 s and 96 s. The figure is an artifact of the clock jumping when
+> `systemd-timesyncd` corrects the fake-hwclock mid-boot. Trust wall-clock
+> power-on-to-picture, or the process age above.
+
+Where the 18 s actually goes: ~8.3 s to `getty@tty1`, of which **4.7 s is
+`ifup@eth0`** blocking `network.target` (which `systemd-user-sessions`, and hence
+`getty`, is ordered after); then `custom.sh`'s KMS/HDMI wait; then the 3 s
+`X16_SPLASH_SECONDS` hold. The remaining big lever is that `ifup` wait — a
+drop-in dropping `After=network.target` from `systemd-user-sessions.service`
+would reclaim most of it, at the cost of fighting the distro's ordering.
+
+Disabled on the dev Pi (no user-visible effect): `samba-ad-dc` (a domain
+controller; the file share only needs `smbd`/`nmbd`), `triggerhappy` + its socket,
+`systemd-pstore`. Also set `AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0` in `dietpi.txt`.
+**Kept:** `dropbear` (SSH — your way back in), `smbd`/`nmbd` (file share), `cron`,
+`fake-hwclock`, `networking`, `x16-splash`.
 
 ---
 

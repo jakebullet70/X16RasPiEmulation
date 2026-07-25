@@ -42,7 +42,26 @@ id "$SMB_USER" >/dev/null 2>&1 || useradd -M -s /usr/sbin/nologin "$SMB_USER"
 smbpasswd -e "$SMB_USER" >/dev/null 2>&1 || true
 
 # Disable the default per-user [homes] share (not wanted on an appliance).
-sed -i 's/^\[homes\]/#[homes]/' "$SMB" 2>/dev/null || true
+#
+# Do NOT just comment out the [homes] HEADER. Its options are not commented with
+# it, so they fall through into the PRECEDING section — [global] — and
+# `valid users = %S` becomes a global rule. %S is the share name, so no real user
+# ever matches IPC$, and Windows gets NT_STATUS_ACCESS_DENIED the moment it tries
+# to enumerate shares (i.e. whenever you browse to \\<pi> rather than the share
+# directly). The [X16] share still works, which makes it look like a password
+# problem. Cost hours on 2026-07-25. Mark the section unavailable instead, so its
+# options stay scoped to it.
+if grep -q '^#\[homes\]' "$SMB" 2>/dev/null; then      # repair an earlier run
+  sed -i 's/^#\[homes\]/[homes]/' "$SMB"
+fi
+if ! sed -n '/^\[homes\]/,/^\[/p' "$SMB" 2>/dev/null | grep -q '^ *available *= *no'; then
+  sed -i '/^\[homes\]/a\   available = no' "$SMB" 2>/dev/null || true
+fi
+
+# /var/log is a tmpfs under DietPi's RAMlog, so samba's per-client log dir does
+# not survive a reboot; smbd then spams "Unable to open new log file".
+mkdir -p /var/log/samba
+printf 'd /var/log/samba 0755 root root -\n' > /etc/tmpfiles.d/samba-log.conf
 
 if ! grep -q '^\[X16\]' "$SMB"; then
 cat >> "$SMB" <<EOF
