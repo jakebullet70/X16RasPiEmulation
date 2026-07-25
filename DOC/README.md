@@ -92,6 +92,17 @@ the Commander X16 emulator.
 - **Dev Pi is current** (2026-07-25): reachable as `X16RasPi` / 192.168.1.193, the
   updated `custom.sh` is deployed and it boots into the X16 with `-joy1` and the
   full library. Previous appliance files backed up in `/root/x16-backup-*`.
+- **Forced EDID had never worked, and fixing it briefly broke audio** — both
+  found and fixed on hardware 2026-07-25. The cmdline used the pre-6.x parameter
+  name (`drm_kms_helper.edid_firmware`, silently ignored), and the synthetic EDID
+  lacked an HDMI VSDB so the sink was treated as DVI and vc4 refused audio
+  (ENOTSUPP/524). Both traps documented in `08-display-fixes.md`.
+- **HDMI audio CONFIRMED working by ear** (2026-07-25) with the EDID forced, via
+  `PSGINIT` / `PSGVOL 0,63` / `PSGNOTE 0,$4A` at the BASIC prompt.
+- **Phase 4 essentially complete**: 60 Hz + forced EDID verified (4.1), quiet-boot
+  tokens all active (4.2), services trimmed and boot measured at 18 s (4.3),
+  gamepad working (4.4). Only the subjective checks remain — eyeball a cold boot
+  for stray text, and a scrolling demo for tearing.
 - **Resume point:** Phase 4 remaining items (60 Hz lock, silent-boot check, boot
   trim), then Phase 5 (harden + package).
 
