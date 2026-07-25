@@ -80,12 +80,25 @@ supported). **Must be run when building the image.**
       script wasn't entered until 9.9 s.
 - [x] `X16_SPLASH_SECONDS` 3 → 1.
 
+- [x] **Splash now paints at 2.68 s instead of 4.78 s** via
+      `config/x16-splash-early.service`. The Pi firmware hands the kernel a
+      `simple-framebuffer` at 0.7 s whose format (`r5g6b5`, 1920x1080, stride
+      3840) is byte-identical to the KMS console's, so the existing blob can be
+      written to it with no conversion — no need to wait for vc4 at 4.3 s.
+      Both splash units are kept: the KMS handover blanks the console
+      (`switching to colour dummy device` at ~4.35 s), and `x16-splash.service`
+      repaints at ~4.8 s. Brief ~0.45 s blank there — worth an eyeball.
+
 Remaining, optional:
 
 - [ ] ~1.7 s still passes between `getty@tty1` activating (3.2 s) and `custom.sh`
-      being entered (5.0 s) — agetty startup. Probably where a dedicated
+      being entered (5.1 s) — agetty startup. Probably where a dedicated
       `x16.service` would help, but it steps outside `dietpi-autostart`, which is
       DietPi's supported mechanism. Small, and the big wins are banked.
+- [ ] ~2.7 s is the practical floor for the splash: systemd only takes over at
+      ~1.7 s and the unit has no ordering left to drop. Earlier would have to
+      come from the firmware, which supports no custom image — its only boot
+      visual is the rainbow test pattern (`disable_splash=0`), currently off.
 - [ ] Cheap trims: `rpi-eeprom-update` 688 ms, `keyboard-setup` 302 ms, FAT
       `systemd-fsck` 435 ms. Kernel is 1.66 s, so ~3 s is close to the floor.
 - [ ] **Static IP is not needed for boot speed** and should NOT ship in the

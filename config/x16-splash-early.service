@@ -1,0 +1,55 @@
+# Commander X16 appliance — EARLIEST possible boot splash.
+#
+# The Pi firmware hands the kernel a simple-framebuffer before Linux has any
+# graphics driver: measured on a Pi 4, /dev/fb0 exists at 0.67s, and its format
+# is exactly what the KMS console uses later --
+#     format=r5g6b5, mode=1920x1080x16, linelength=3840
+# -- so the same pre-rendered blob can be written to it with no conversion.
+#
+# vc4 KMS only binds at ~4.3s. Waiting for that (what x16-splash.service does)
+# meant the splash landed at 4.78s. This unit paints at 2.68s instead.
+#
+# ~2.7s is close to the floor: systemd itself only takes over at ~1.7s, and this
+# unit has no ordering left to remove. Anything earlier would have to come from
+# the firmware, which has no custom-image support -- its only boot visual is the
+# rainbow test pattern (disable_splash=0), which is not ours and not branded.
+#
+# Both units are wanted: this one covers the firmware framebuffer, and
+# x16-splash.service repaints after the KMS handover blanks the console
+# (~4.15s "switching to colour dummy device"). custom.sh paints a third time
+# right before launch. Cheap: writing 4 MB to the fb takes milliseconds.
+#
+# INSTALL:
+#   sudo install -m 0644 config/x16-splash-early.service \
+#        /etc/systemd/system/x16-splash-early.service
+#   sudo systemctl enable x16-splash-early.service
+#
+[Unit]
+Description=Commander X16 boot splash (firmware framebuffer, pre-KMS)
+DefaultDependencies=no
+# / is already mounted by the kernel (rootwait), and the blob only needs to be
+# READ, so this deliberately does not wait for local-fs.target (2.85s) the way
+# x16-splash.service does. systemd-remount-fs is enough of a barrier.
+# NO After= at all, deliberately. The blob is only READ, and / is already
+# mounted by the kernel (rootwait), so nothing has to happen first. An earlier
+# revision waited on systemd-remount-fs.service, which turned out to be the
+# actual gate -- it finished at 3.14s on one boot (1.27s on another), and the
+# splash inherited that.
+#
+# Before=sysinit.target ALONE is also not enough: it only means "finish before
+# the target is reached", so systemd deferred it to the last moment (3.17s).
+# Naming the specific early units forces it to the front of the queue.
+Before=systemd-remount-fs.service systemd-sysusers.service
+Before=systemd-tmpfiles-setup-dev.service local-fs.target sysinit.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/x16-splash
+RemainAfterExit=yes
+# The script waits for /dev/fb0 itself; keep the timeout short so a machine
+# without a framebuffer cannot stall the boot.
+TimeoutStartSec=15
+
+[Install]
+WantedBy=sysinit.target
