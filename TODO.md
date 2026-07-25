@@ -17,7 +17,32 @@ Running list of what's outstanding. Status of what's *done* lives in
       Note this interacts with hardening — under a read-only root overlay,
       anything written to an ext4 fsroot does not survive reboot.
 
+- [ ] **An end user cannot set up Wi-Fi on the shipped image.** Verified on the
+      dev Pi 2026-07-25 — all three routes are dead ends:
+      1. `/etc/wpa_supplicant/wpa_supplicant.conf` is on ext4, mode 0600 —
+         invisible to a PC, so it needs the SSH access they don't have yet.
+      2. `dietpi-wifi.txt` *is* on FAT, but only `dietpi-firstboot.bash` (a
+         one-shot that disables itself) and `dietpi-wifidb` (interactive, via
+         `dietpi-config`) read it. A PiShrink clone has already run first-boot,
+         so edits do nothing. `dietpi-wifi-monitor.service` is a watchdog, not an
+         applier, and is disabled.
+      3. `dtoverlay=disable-wifi` means no `wlan0` regardless.
+
+      Fix should follow the `x16.conf` pattern: a FAT-resident file the appliance
+      re-reads every boot and applies when changed. Complication: `dtoverlay` is
+      read by firmware before userspace, so no boot hook can enable the radio for
+      the current boot. Either ship with the radio **enabled** (recommended — an
+      appliance shouldn't need network access to configure networking; costs a
+      little boot time and maybe console chatter, needs measuring), or ship
+      disabled and have the hook remove the overlay and reboot once, with a
+      loop guard.
+
 ## Phase 5 — harden & package ([DOC/07](DOC/07-phase5-harden-package.md))
+
+- [ ] Clean the FAT partition before imaging — the dev Pi has accumulated
+      `config.txt.bak-{audio-310,disbt,quiet,x16}` and
+      `cmdline.txt.bak-{btquiet,edidfw,quiet}`, plus a Windows
+      `System Volume Information` folder. All would ship to end users.
 
 - [ ] Harden the SD card: `log2ram` **or** read-only overlay. Then pull power
       mid-session several times and confirm it still boots clean.
