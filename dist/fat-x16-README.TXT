@@ -13,14 +13,14 @@ TO USE THEM ON THE X16
 
 At the READY. prompt, type:
 
-    @CD:MYFILES            (go into this folder)
+    @CD:FAT-FILES            (go into this folder)
     @$                     (list what's in it)
     LOAD"NAME.PRG",8       (load one - the quotes matter)
     RUN                    (start it)
 
 Or load it in one step without changing folder:
 
-    LOAD"MYFILES/NAME.PRG",8
+    LOAD"FAT-FILES/NAME.PRG",8
     RUN
 
 To get back to the main collection that came with the machine:
@@ -35,7 +35,7 @@ SAVING YOUR OWN WORK
 It works in both directions. If you write a program on the X16 and save it
 while you are in this folder:
 
-    @CD:MYFILES
+    @CD:FAT-FILES
     SAVE"MYNAME.PRG",8
 
 ...the file appears in this folder, so you can copy it off to your computer

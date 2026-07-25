@@ -9,11 +9,13 @@ Running list of what's outstanding. Status of what's *done* lives in
       Layout decided and verified on hardware 2026-07-25 — see DOC/07 Part A2.
       FAT is fixed at build time (PiShrink expands root, never FAT), so it must
       fit a 4 GB card: 512 MB leaves ~3.2 GB for a system that needs ~1.4 GB.
-      Library stays on ext4; `mount --bind /boot/firmware/x16 <fsroot>/MYFILES`
+      Library stays on ext4; `mount --bind /boot/firmware/x16 <fsroot>/FAT-FILES`
       exposes the PC-writable folder inside it. Confirmed: CD/DIR/LOAD all work
       in subdirectories, and SAVE writes back through the bind mount onto FAT.
-      Remaining work: create the partition at that size when building, add the
-      bind-mount to `custom.sh`, and ship `dist/fat-x16-README.TXT` in the folder.
+      The bind-mount is **done** — `drop_attach()` in `custom.sh`, folder named by
+      `X16_DROP_DIR` (default `FAT-FILES`), deployed and verified on the dev Pi.
+      Remaining work: create the partition at that size when building, and ship
+      `dist/fat-x16-README.TXT` in the folder.
       Repartitioning changes PARTUUID/UUIDs — update `cmdline.txt` and both
       `/etc/fstab` lines or it won't boot.
 
@@ -30,8 +32,9 @@ Running list of what's outstanding. Status of what's *done* lives in
       `cmdline.txt.bak-{btquiet,edidfw,quiet}`, `config.txt.bak-x16wifi`, plus a
       Windows `System Volume Information` folder. All would ship to end users.
 
-- [ ] Harden the SD card: `log2ram` **or** read-only overlay. Then pull power
-      mid-session several times and confirm it still boots clean.
+- [ ] Harden the SD card with **`log2ram`** (not the read-only overlay — it would
+      silently discard SAVEs into the ext4 library; see DOC/07 Part A2). Then pull
+      power mid-session several times and confirm it still boots clean.
 - [ ] Capture the image: `dd` → PiShrink → `x16-appliance-r49.img.gz`.
 - [ ] Verify by flashing a **blank** card and booting a second Pi through Gate 3.
 - [ ] Re-check [dist/README-end-user.md](dist/README-end-user.md) against the

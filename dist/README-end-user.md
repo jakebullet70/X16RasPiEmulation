@@ -42,17 +42,26 @@ The card holds a folder your X16 can read, and you fill it from your computer.
    offering to format the card — click cancel.** Windows can only see this one
    small drive; that's normal.
 4. Open the **`x16`** folder on it and copy your `.PRG` and `.BAS` files in.
+   There's a `README.TXT` in there with these same instructions.
 5. Eject the card properly, put it back in the Pi, and power on.
 
-Then, at the X16 prompt:
+On the X16 your files appear in a folder called **`FAT-FILES`**, alongside the
+library that came with the machine. At the prompt:
 
 ```text
-DIR                 (lists your files)
-LOAD"FILENAME"      (loads one — the quotes matter)
-RUN                 (starts it)
+@$                       (lists what's here)
+@CD:FAT-FILES            (go into your own folder)
+@$                       (lists your files)
+LOAD"FILENAME.PRG",8     (loads one — the quotes matter)
+RUN                      (starts it)
+@CD:..                   (back to the main collection)
 ```
 
-That drive is small — around 100 MB — so it holds a good personal selection
+It works the other way too: type `@CD:FAT-FILES` and then `SAVE"NAME.PRG",8` and
+the file lands on the card, ready to copy off next time you take it out. That's
+the only folder your computer can see, so save there if you want to keep it.
+
+That drive is small — around 512 MB — so it holds a good personal selection
 rather than an entire collection. If you fill it, just swap files in and out.
 
 ## 4. Sound and controllers
@@ -135,7 +144,8 @@ To reach the Pi's command line at all, connect with SSH as `root`, password
 | No sound | Turn up the TV. Sound only comes out of the HDMI display, not the Pi's headphone socket. |
 | Keyboard does nothing | Use a plain wired USB keyboard for the first test; some wireless dongles need a moment after power-on. |
 | Gamepad does nothing | Plug it in before switching on. If it's still ignored, check `X16_JOYSTICKS` is not `0` in `x16.conf` (section 5). Unusual controllers may simply not be recognised. |
-| `DIR` doesn't show my files | They must be inside the `x16` folder on the small drive, not loose at its top level. Check the filenames end in `.PRG` or `.BAS`. |
+| `@$` doesn't show my files | Type `@CD:FAT-FILES` first — your files are in that folder, and `@$` lists wherever you currently are. On the card they must be inside the `x16` folder, not loose at its top level. |
+| `DIR` gives `?SYNTAX ERROR` | There's no `DIR` command — the X16 uses `@$` to list a folder. |
 | It won't start at all | Re-flash the image (section 1). If that fails too, the SD card may be worn out — they do wear out. Try another card. |
 | Wi-Fi won't connect | Check the network name's spelling and capitals, and that `X16_WIFI_COUNTRY` is your country (section 6). Remember the Pi restarts itself once the first time you enable Wi-Fi. |
 

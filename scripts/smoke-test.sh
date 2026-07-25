@@ -12,6 +12,18 @@ INSTALL_DIR="/opt/x16"
 RUN_SECS="${RUN_SECS:-5}"
 fail=0
 
+# Read the machine's ACTUAL config, exactly as the appliance loop does, so the
+# checks below test this Pi and not a hypothetical default. (Without this the
+# fsroot guard silently validated the built-in FAT default on a machine whose
+# x16.conf repoints the fsroot at ext4 — i.e. it passed without testing anything.)
+# Environment wins, so `X16_FSROOT=/tmp/foo ./smoke-test.sh` still works.
+for c in /boot/firmware/x16.conf /boot/x16.conf; do
+  [ -f "$c" ] || continue
+  echo "INFO: reading settings from ${c}"
+  eval "$(grep -E '^X16_[A-Z_]+=' "$c" | sed 's/^/: "${/; s/=/:=/; s/$/}"/')"
+  break
+done
+
 echo "== x16 headless smoke test =="
 
 # 1. binary present + executable
@@ -57,15 +69,29 @@ boot_fat() {
   done
   return 1
 }
+is_fat() {
+  case "$(stat -f -c %T "$1" 2>/dev/null)" in msdos|vfat|exfat) return 0 ;; esac
+  return 1
+}
 if FAT_MNT="$(boot_fat)"; then
   FSROOT="${X16_FSROOT:-${FAT_MNT}/x16}"
+  DROP="${X16_DROP_DIR-FAT-FILES}"
   if [ -d "$FSROOT" ]; then
-    case "$(stat -f -c %T "$FSROOT" 2>/dev/null)" in
-      msdos|vfat|exfat) echo "PASS: fsroot ${FSROOT} is on the FAT boot partition" ;;
-      *) echo "FAIL: fsroot ${FSROOT} is NOT on FAT — a PC won't see it"; fail=1 ;;
-    esac
-    FREE_MB=$(df -Pm "$FSROOT" 2>/dev/null | awk 'NR==2 {print $4}')
-    echo "INFO: fsroot has ${FREE_MB:-?} MB free for user programs"
+    if is_fat "$FSROOT"; then
+      echo "PASS: fsroot ${FSROOT} is on the FAT boot partition"
+      PC_DIR="$FSROOT"
+    elif [ -n "$DROP" ] && is_fat "${FSROOT}/${DROP}"; then
+      # Library on ext4, card folder bind-mounted in as a subdirectory. Still
+      # reachable from a PC, which is what actually matters.
+      echo "PASS: fsroot ${FSROOT} is ext4, drop folder ${FSROOT}/${DROP} is on FAT"
+      PC_DIR="${FSROOT}/${DROP}"
+    else
+      echo "FAIL: nothing under fsroot ${FSROOT} is on FAT — a PC won't see it"
+      [ -n "$DROP" ] && echo "      (expected ${FSROOT}/${DROP} to be bind-mounted from ${FAT_MNT}/x16)"
+      fail=1; PC_DIR="$FSROOT"
+    fi
+    FREE_MB=$(df -Pm "$PC_DIR" 2>/dev/null | awk 'NR==2 {print $4}')
+    echo "INFO: the PC-visible folder has ${FREE_MB:-?} MB free for user programs"
   else
     echo "FAIL: fsroot ${FSROOT} does not exist (run install-x16.sh)"; fail=1
   fi
@@ -83,7 +109,6 @@ if [ -f "$DISP" ]; then
   missing=""
   for key in $(grep -ho 'X16_[A-Z_]\+' "${SCRIPT_DIR}/custom.sh" "${SCRIPT_DIR}/run-x16.sh" 2>/dev/null |
                sort -u); do
-    [ "$key" = "X16_FSROOT" ] && continue          # env-only override, not a conf key
     grep -q "^${key}=\$${key}\$" "$DISP" || missing="${missing} ${key}"
   done
   if [ -z "$missing" ]; then

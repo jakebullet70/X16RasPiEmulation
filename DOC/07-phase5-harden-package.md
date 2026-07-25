@@ -53,9 +53,11 @@ toggle the overlay off, make the change, re-enable, reboot. Since user programs 
 on the **FAT `/boot` partition** (which stays writable for drops from a PC) this is
 usually fine for a locked-down appliance.
 
-> **Pick one.** `log2ram` for a unit you'll tweak occasionally; read-only overlay
-> for a truly sealed appliance. Either way, the `/boot` FAT partition remains the
-> user's drop zone for `.prg`/`.bas` files.
+> **Decision: `log2ram` for the shipped image.** The overlay is stronger, but it
+> also makes every write to the ext4 root vanish on reboot — including a `SAVE`
+> into the bundled library, which we want to stay writable. See "Hardening and the
+> writable library" in Part A2. Either way, the FAT partition remains the user's
+> drop zone for `.prg`/`.bas` files and persists under both options.
 
 **Gate (harden):** after enabling, cold-boot the Pi, pull power mid-session a few
 times, and confirm it still boots straight to the X16 with no fsck stall or
@@ -88,28 +90,34 @@ thousands of programs. Nobody hand-copies gigabytes of them.
 
 The two kinds of content have different needs, so they live in different places:
 
-- **The bundled community library** (~250 MB) is effectively read-only and never
-  needs to be reachable from a PC → **ext4 root**, where space is plentiful.
+- **The bundled community library** (~250 MB) is too big for FAT and does not need
+  to be reachable from a PC → **ext4 root**, where space is plentiful.
 - **The owner's own programs** are small but *must* be PC-writable → **FAT**.
+
+Note "does not need to be reachable from a PC" — **not** "read-only". The ext4 root
+is mounted `rw` and the X16 can `SAVE` anywhere in the library (verified on
+hardware). The split is about *size* and *PC visibility*, not about write access.
+The only thing that would make the library read-only is the hardening choice
+below — see "Hardening and the writable library".
 
 `x16emu` takes only one `-fsroot`, so the FAT folder is **bind-mounted into the
 library as a subdirectory**:
 
 ```sh
-mount --bind /boot/firmware/x16 <fsroot>/MYFILES
+mount --bind /boot/firmware/x16 <fsroot>/FAT-FILES
 ```
 
 The owner sees one drive on their PC; the X16 sees the library at the root with
-their own files in `MYFILES`.
+their own files in `FAT-FILES`.
 
 ### Verified on hardware (r49, 2026-07-25)
 
 Tested headlessly with `x16emu -bas … -run -echo -warp` under
 `SDL_VIDEODRIVER=dummy`, so it needs no display:
 
-- `DOS"CD:MYFILES"` + `DOS"$"` lists the subdirectory correctly.
-- `LOAD"MYFILES/SUB.PRG",8` works **without** changing directory first.
-- `DOS"CD:MYFILES"` then `LOAD"SUB.PRG",8` also works.
+- `DOS"CD:FAT-FILES"` + `DOS"$"` lists the subdirectory correctly.
+- `LOAD"FAT-FILES/SUB.PRG",8` works **without** changing directory first.
+- `DOS"CD:FAT-FILES"` then `LOAD"SUB.PRG",8` also works.
 - Across the bind mount, the X16 sees files placed on the FAT side from a PC.
 - **`SAVE` writes back through the bind mount onto the FAT partition** — so it's
   two-way, and an owner can save their own work and copy it off on a PC.
@@ -120,6 +128,34 @@ numbered BASIC program it is a `?SYNTAX ERROR`; use the `DOS"…"` form there. T
 
 `dist/fat-x16-README.TXT` ships in that FAT folder to explain all of this to the
 owner — it's the first thing they see when they open the card.
+
+### Implemented in `custom.sh`
+
+`drop_attach()` performs the bind on every loop iteration, after re-reading
+`x16.conf`. It is idempotent (re-binding is a no-op), re-binds if `X16_FSROOT`
+changes under it, skips itself when the fsroot already *is* the FAT folder, and
+rejects a `X16_DROP_DIR` containing `/`, `.` or `..` so the name cannot escape the
+fsroot. Crucially it **refuses to bind over a non-empty directory** — a bind mount
+hides whatever is underneath, and silently making someone's files disappear is
+exactly the kind of quiet failure this project keeps getting bitten by. All six
+behaviours were exercised on hardware.
+
+### Hardening and the writable library
+
+This is where "read-only" would stop being a figure of speech. The two options in
+Part A are **not** equivalent for this layout:
+
+| Hardening | FAT drop folder | ext4 library |
+|---|---|---|
+| `log2ram` | writable, persists | **writable, persists** |
+| Read-only overlay | writable, persists | writable, **discarded on reboot** |
+
+Under the overlay, a `SAVE` into the library appears to work and is gone after a
+power cycle — the worst possible failure shape. So: **ship `log2ram`**, and keep
+the overlay as an option for anyone who wants a truly sealed unit and understands
+that only `FAT-FILES/` then survives. The user-facing README already tells owners
+to save into `FAT-FILES` (it is the only folder their PC can read anyway), so the
+common path is safe either way.
 
 ## Part B — Capture the distributable image
 

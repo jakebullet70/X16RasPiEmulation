@@ -33,11 +33,68 @@ CONF="${BOOT_FAT}/x16.conf"
 # cannot live there. Such a machine sets X16_FSROOT in x16.conf to point at the
 # roomy ext4 root instead, reachable over the Samba share rather than the card.
 X16_FSROOT=""
+X16_DROP_DIR=FAT-FILES
 [ -f "$CONF" ] && . "$CONF" 2>/dev/null
 USER_PROG_DIR="${X16_FSROOT:-${BOOT_FAT}/x16}"
 mkdir -p "$USER_PROG_DIR" 2>/dev/null
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') x16-appliance: $*" >> "$LOG"; }
+
+# ---- PC-visible drop folder -------------------------------------------------
+# The FAT partition is small (512 MB in the shipped image); the bundled library
+# is ~250 MB and lives on the roomy ext4 root. x16emu accepts only ONE -fsroot,
+# so when the fsroot is on ext4 the FAT folder is bind-mounted INTO it as a
+# subdirectory: the owner's PC sees one small drive, the X16 sees the library at
+# its root with the owner's own files in FAT-FILES/.
+#
+# Verified on hardware (r49, 2026-07-25): CD / $ / LOAD all work in the
+# subdirectory, and SAVE writes back through the bind mount onto the FAT
+# partition — so the drop folder is two-way, not just read-in.
+#
+# Set X16_DROP_DIR= (empty) in x16.conf to disable the bind entirely.
+DROP_SRC="${BOOT_FAT}/x16"
+DROP_CUR=""                     # target currently bound, "" = nothing bound
+
+# Exact-target match against /proc/mounts (mountpoint(1) isn't guaranteed here).
+is_mounted() {
+  awk -v t="$1" '$2 == t { found = 1 } END { exit !found }' /proc/mounts 2>/dev/null
+}
+
+# Where the drop folder should be bound right now, or non-zero if it shouldn't.
+drop_target() {
+  d="${X16_DROP_DIR:-}"
+  [ -n "$d" ] || return 1                        # disabled by config
+  case "$d" in */*|.|..) return 1 ;; esac        # plain name only — must not escape
+  [ "$USER_PROG_DIR" = "$DROP_SRC" ] && return 1 # fsroot already IS the FAT folder
+  printf '%s\n' "${USER_PROG_DIR}/${d}"
+}
+
+drop_detach() {
+  [ -n "$DROP_CUR" ] || return 0
+  is_mounted "$DROP_CUR" && umount "$DROP_CUR" 2>/dev/null
+  DROP_CUR=""
+}
+
+drop_attach() {
+  if tgt="$(drop_target)"; then :; else tgt=""; fi
+  [ "$tgt" = "$DROP_CUR" ] || drop_detach       # fsroot changed under us
+  [ -n "$tgt" ] || return 0
+  is_mounted "$tgt" && { DROP_CUR="$tgt"; return 0; }
+  [ -d "$DROP_SRC" ] || { log "drop dir: ${DROP_SRC} missing — not binding"; return 0; }
+  # A bind mount HIDES whatever is underneath. If someone has real files there,
+  # refuse rather than make them vanish.
+  if [ -d "$tgt" ] && [ -n "$(ls -A "$tgt" 2>/dev/null)" ]; then
+    log "drop dir: ${tgt} exists and is not empty — refusing to bind over it"
+    return 0
+  fi
+  mkdir -p "$tgt" 2>/dev/null
+  if mount --bind "$DROP_SRC" "$tgt" 2>>"$LOG"; then
+    DROP_CUR="$tgt"
+    log "drop dir: bound ${DROP_SRC} -> ${tgt}"
+  else
+    log "drop dir: bind ${DROP_SRC} -> ${tgt} FAILED"
+  fi
+}
 
 # Wipe the console immediately so the DietPi-login "[ INFO ] Starting..." line and
 # any residual boot text vanish the instant we take over tty1. (The DietPi ASCII
@@ -149,10 +206,13 @@ while true; do
   X16_OUTPUT=1080p         # 1080p | 720p
   X16_FORCE_EDID=1         # 1 = force TV mode; 0 = real EDID (VGA monitor)
   X16_JOYSTICKS=1          # SNES ports accepting a USB gamepad, 0..4
+  X16_DROP_DIR=FAT-FILES     # PC-visible folder inside the fsroot ("" = disabled)
   [ -f "$CONF" ] && . "$CONF" 2>/dev/null
   # fsroot may be repointed at the ext4 root for a library too big for FAT.
   USER_PROG_DIR="${X16_FSROOT:-${BOOT_FAT}/x16}"
+  mkdir -p "$USER_PROG_DIR" 2>/dev/null
 
+  drop_attach
   apply_edid
 
   VIDEO_ARGS="-fullscreen -scale ${X16_SCALE}"

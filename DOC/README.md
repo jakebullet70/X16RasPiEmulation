@@ -78,13 +78,21 @@ the Commander X16 emulator.
   Confirmed with a `0810:e501` SNES-style USB pad, which SDL maps built-in as
   "NEXT SNES Controller". `x16-gamepad-test` diagnoses other pads by asking
   libSDL2 directly via ctypes.
-- **`X16_FSROOT` added, and the FAT plan does not fit every machine.** The dev Pi
-  already holds the ~250 MB community library in `/boot/x16` (ext4); the FAT boot
-  partition is 127 MB total. So the fsroot is now configurable: default is the
-  FAT `x16/` folder (drop files from any PC), overridable per machine. The dev Pi
-  is set to `X16_FSROOT=/boot/x16` and therefore uses Samba/scp, **not** the
-  SD-card drop workflow that `dist/README-end-user.md` describes. Reconcile
-  before packaging — see "Open questions" below.
+- **"Where do user programs live?" — SETTLED** (2026-07-25). It was a real
+  tension: the shipped image wants the fsroot on FAT so an owner can drop `.PRG`
+  files in from any PC, but the community library (~250 MB) will not fit there.
+  Resolved by having **both**: the library on ext4 as the fsroot, with the FAT
+  folder bind-mounted inside it as `FAT-FILES/` (`x16emu` takes only one
+  `-fsroot`). One small drive on the owner's PC, library at the X16's root, their
+  own files one level down — and `SAVE` writes back through the mount onto the
+  card. Implemented as `drop_attach()` in `custom.sh` and verified on hardware,
+  including the negative cases; `X16_DROP_DIR` names the folder (`FAT-FILES`).
+- **The ext4 library is READ/WRITE and stays that way.** Earlier notes described
+  it as "read-only", which was about it being bundled content, not a mount
+  option — confirmed on hardware that `/` is `rw` and the X16 can `SAVE` into the
+  library root. This does constrain hardening: a read-only overlay would silently
+  discard those writes at reboot, so the shipped image uses `log2ram`
+  (`07-phase5-harden-package.md`, Part A2).
 - **`x16-display` no longer eats settings**: its `save()` rewrote `x16.conf` with
   only four keys, silently erasing anything else (`X16_SPLASH_SECONDS` was already
   affected). `smoke-test.sh` now fails if a key the appliance reads is missing
@@ -118,13 +126,4 @@ the Commander X16 emulator.
 
 ## Open questions
 
-- **Where do user programs live?** Two workflows are in tension. The distributable
-  image wants the fsroot on the FAT partition so a non-technical owner can drop
-  `.PRG` files in from any PC (what `dist/README-end-user.md` says). But the FAT
-  partition is 127 MB and the community library is ~250 MB, so a machine with the
-  full library must keep the fsroot on ext4 and add files over the network.
-  `X16_FSROOT` lets each machine choose, but the *shipped* image has to pick one
-  story. Likely resolution: ship with a small curated selection on FAT, and treat
-  the full library as an optional `x16-fetch-sd --dest` extra for networked users.
-  Decide before capturing the Phase 5 image.
 - Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro.
