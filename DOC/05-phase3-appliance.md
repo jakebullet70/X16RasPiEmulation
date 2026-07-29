@@ -136,7 +136,7 @@ sudo reboot
 Tune the appliance: lock the exact HDMI 60 Hz mode and verify vsync smoothness,
 trim boot time (disable unused services, quiet boot / hide the rainbow splash and
 boot text so the *only* thing ever on screen is the X16), and map a USB gamepad to
-the X16 joystick. Then Phase 5: SD-card hardening (`log2ram` / read-only overlay)
+the X16 joystick. Then Phase 5: SD-card hardening (DietPi-RAMlog, already on)
 and capturing the shrunk, distributable `.img`. See `02-option-a-plan.md`.
 
 ## Troubleshooting

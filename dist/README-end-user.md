@@ -38,9 +38,9 @@ The card holds a folder your X16 can read, and you fill it from your computer.
 
 1. Unplug the Pi's power.
 2. Take the SD card out and put it in your computer.
-3. A small drive appears (Windows may call it `bootfs`). **Ignore any message
-   offering to format the card — click cancel.** Windows can only see this one
-   small drive; that's normal.
+3. A small drive appears — it may show up with no name at all, just a drive
+   letter. **Ignore any message offering to format the card — click cancel.**
+   Windows can only see this one small drive; that's normal.
 4. Open the **`x16`** folder on it and copy your `.PRG` and `.BAS` files in.
    There's a `README.TXT` in there with these same instructions.
 5. Eject the card properly, put it back in the Pi, and power on.
@@ -61,8 +61,9 @@ It works the other way too: type `@CD:FAT-FILES` and then `SAVE"NAME.PRG",8` and
 the file lands on the card, ready to copy off next time you take it out. That's
 the only folder your computer can see, so save there if you want to keep it.
 
-That drive is small — around 512 MB — so it holds a good personal selection
-rather than an entire collection. If you fill it, just swap files in and out.
+That drive is small — around 100 MB free — so it holds a good personal selection
+rather than an entire collection. `.PRG` files are tiny, so that is still room
+for thousands of them. If you do fill it, just swap files in and out.
 
 ## 4. Sound and controllers
 
@@ -109,15 +110,31 @@ The Pi applies the settings itself. **The first time you do this it restarts onc
 on its own** — switching the radio on needs a restart — so give it an extra
 minute before assuming something is wrong.
 
+**Once it connects, the Pi empties your password out of the file.** That is
+deliberate: it remembers the network internally, so leaving the password sitting
+somewhere any computer could open it would be pointless risk. Next time you put
+the card in your PC, `x16-wifi.conf` will look blank again — that's what success
+looks like. To change networks later, just type the new details in again.
+
+**To find out what happened, read `x16-wifi-status.txt`** on the same small
+drive. It always shows how the Pi's last start-up went — that it connected (and
+on what address), or exactly what to check. On a new card it simply says Wi-Fi
+isn't set up and the network cable is in use, which is normal. If your details
+are still in `x16-wifi.conf`, the Pi did *not* get connected.
+
 Notes:
 
 - The country code is required. Wi-Fi is regulated per country and the Pi won't
   transmit properly until it knows where it is. `GB`, `US`, `DE`, `FR`, `AU`, …
-- The network name is case-sensitive.
-- The password sits in a plain text file that any PC can read, so don't use this
-  on a network whose password you'd mind sharing.
-- If it doesn't connect, the reason is written to `/var/log/x16-appliance.log`
-  on the Pi — usually a wrong password or the wrong country code.
+  Leave it filled in — the Pi keeps it when it clears the rest.
+- The network name is case-sensitive, and so is the password.
+- The password is in a plain text file until the Pi connects and empties it, so
+  eject the card rather than leaving it in a shared computer in the meantime.
+- Emptying the file is not the same as scrubbing the card. Text editors usually
+  save by writing a fresh copy rather than overwriting the old one, so a trace of
+  the password can survive in unused space where ordinary software will never
+  show it — but recovery tools would. It is not worth worrying about for a card
+  that stays in your own Pi. If you are giving the card away, reformat it.
 
 ## 7. Adding programs over your network (optional)
 
@@ -147,7 +164,8 @@ To reach the Pi's command line at all, connect with SSH as `root`, password
 | `@$` doesn't show my files | Type `@CD:FAT-FILES` first — your files are in that folder, and `@$` lists wherever you currently are. On the card they must be inside the `x16` folder, not loose at its top level. |
 | `DIR` gives `?SYNTAX ERROR` | There's no `DIR` command — the X16 uses `@$` to list a folder. |
 | It won't start at all | Re-flash the image (section 1). If that fails too, the SD card may be worn out — they do wear out. Try another card. |
-| Wi-Fi won't connect | Check the network name's spelling and capitals, and that `X16_WIFI_COUNTRY` is your country (section 6). Remember the Pi restarts itself once the first time you enable Wi-Fi. |
+| Wi-Fi won't connect | Read `x16-wifi-status.txt` on the card — it says what went wrong. Check the network name's spelling and capitals, and that `X16_WIFI_COUNTRY` is your country (section 6). Remember the Pi restarts itself once the first time you enable Wi-Fi. |
+| My Wi-Fi details vanished from the card | That means it worked. The Pi saves the network internally and clears the password off the card on purpose (section 6). |
 
 ## About this image
 

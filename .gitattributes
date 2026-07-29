@@ -7,6 +7,11 @@
 *.snippet text eol=lf
 *.py      text eol=lf
 
+# The release driver runs on Windows, so CRLF is the native form. It is also
+# kept strictly ASCII: PowerShell 5.1 reads .ps1 as ANSI, where an em-dash
+# decodes to a smart quote that silently terminates a string mid-script.
+*.ps1     text eol=crlf
+
 # The opposite case: the FAT-partition README is read in Windows Notepad by
 # people who have never seen a Pi. It must keep CRLF or it renders as one
 # run-on block. `-text` = never normalise, in either direction.

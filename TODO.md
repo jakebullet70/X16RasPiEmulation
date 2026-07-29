@@ -5,41 +5,302 @@ Running list of what's outstanding. Status of what's *done* lives in
 
 ## Blocking the Phase 5 image
 
-- [ ] **Build the image with a 512 MB FAT partition + bind-mounted drop folder.**
+- [x] **FAT size: settled at DietPi's stock 128 MB, do not repartition**
+      (2026-07-29). 512 MB was the original plan, 256 MB briefly replaced it, and
+      both were reverted: ~97 MB free already holds thousands of `.PRG` files,
+      and the space is worth more to the root filesystem on a 4 GB card.
+      Enlarging it is not free — it means rewriting the partition table offline,
+      which is exactly what let an unbootable image through (see below).
+      `refit-fat.sh` still does it if a future release needs it; the default is
+      now `-FatMB 0`, no refit.
+
+- [x] **THE DISK IDENTIFIER TRAP — cost a full flash-and-fail cycle.**
+      `cmdline.txt` pins `root=PARTUUID=6a31ef16-02`. On MBR that is *derived*
+      from the disk signature, not stored — so PiShrink deleting and recreating
+      the last partition with `parted` gave the image a new signature and the
+      kernel could no longer find its own root filesystem. Symptom: display wakes
+      (firmware and `start4.elf` were fine), then black forever, no message,
+      because `rootwait` + `quiet loglevel=0`. The image mounted perfectly on a
+      PC and every boot file was byte-identical to a working build.
+      Now fixed in two places: `shrink-image.sh` records the id before PiShrink
+      and restores it with `sfdisk --disk-id`, and `check-image.sh` **fails** an
+      image whose `cmdline.txt` PARTUUID or `fstab` UUIDs do not resolve against
+      the actual image. Worth remembering generally: an identifier derived from
+      something else can be invalidated by a tool that never touched the file
+      containing it.
+
+- [ ] **Superseded — was: build the image with a 256 MB FAT partition.**
       Layout decided and verified on hardware 2026-07-25 — see DOC/07 Part A2.
       FAT is fixed at build time (PiShrink expands root, never FAT), so it must
-      fit a 4 GB card: 512 MB leaves ~3.2 GB for a system that needs ~1.4 GB.
+      fit a 4 GB card. **Revised 512 MB → 256 MB (2026-07-29):** a built image has
+      222 MB free at 256 MB, so the other 256 MB is worth more to the root.
+      The tooling exists and is tested — `scripts/release/refit-fat.sh`, offline
+      between capture and shrink, because FAT cannot be grown on a running Pi
+      (the root's start would have to move). It preserves the MBR disk id, the
+      root filesystem UUID and the FAT volume serial, so the PARTUUID/UUID
+      warning below turned out to be avoidable: **no edits to `cmdline.txt` or
+      `/etc/fstab` are needed.** Verified 128 → 256 MB on a real build.
       Library stays on ext4; `mount --bind /boot/firmware/x16 <fsroot>/FAT-FILES`
       exposes the PC-writable folder inside it. Confirmed: CD/DIR/LOAD all work
       in subdirectories, and SAVE writes back through the bind mount onto FAT.
       The bind-mount is **done** — `drop_attach()` in `custom.sh`, folder named by
       `X16_DROP_DIR` (default `FAT-FILES`), deployed and verified on the dev Pi.
-      Remaining work: create the partition at that size when building, and ship
-      `dist/fat-x16-README.TXT` in the folder.
-      Repartitioning changes PARTUUID/UUIDs — update `cmdline.txt` and both
-      `/etc/fstab` lines or it won't boot.
+      Remaining work: run `refit-fat.sh` as part of the real release capture.
+      (`dist/fat-x16-README.TXT` *is* already in the folder.)
 
-- [ ] **The shipped image must not carry the dev Pi's Wi-Fi state.** The applier
-      exists now (`x16-wifi.conf` + `x16-wifi-apply.service`), but the image has
-      to ship with `X16_WIFI_SSID=` empty and **no** `.x16-wifi.state` /
-      `.x16-wifi.nohardware` stamp files on the FAT partition — a shipped stamp
-      would make the owner's first edit look "unchanged" and be ignored.
+- [ ] **The shipped image must not carry the dev Pi's Wi-Fi state.** The image
+      has to ship with `X16_WIFI_SSID=`/`X16_WIFI_PSK=` empty, a valid
+      `X16_WIFI_COUNTRY`, and **no** `.x16-wifi.state` / `.x16-wifi.nohardware` /
+      `x16-wifi-status.txt` on the FAT partition. Handled by
+      `prep-image-source.sh`, enforced by `check-image.sh` — which confirmed
+      `x16RasPi4-try6.gz` ships both the stamp and our credentials.
+      The stamp itself is now **gone from the design**: the applier clears the
+      card on a successful join instead (2026-07-29), so a stale stamp can no
+      longer exist to be shipped. `.x16-wifi.state` is deleted on sight.
+      Two things still to decide before capture:
+      - **The country code ships as the owner's default.** Confirmed on the
+        flashed card 2026-07-29, and it *did* ship split: `x16-wifi.conf` and the
+        ext4 template both say `US`, `dietpi.txt` says
+        `AUTO_SETUP_NET_WIFI_COUNTRY_CODE=GB`, and the README's example shows
+        `GB`. The applier reads the card, so the effective default is **US** and
+        the other two are cosmetic — but pick one on purpose and make all four
+        agree. A missing or wrong code looks exactly like a wrong password.
+      - **The dev Pi's dropbear host keys are baked in.** `--reset-host-keys`
+        regenerates them; dropbear here runs without `-R`, so simply deleting
+        them would ship an image with no SSH at all.
+      **Consume-and-clear is now verified on hardware (2026-07-29).** A real Pi 4
+      read credentials off the card, enabled the radio, rebooted itself once,
+      joined the AP at 192.168.1.194, cleared its own `x16-wifi.conf` keeping
+      `X16_WIFI_COUNTRY=US`, and wrote the "Connected" status file. A further
+      reboot brought Wi-Fi up on its own from a blank card in 13 s. Full
+      sequence in `x16-appliance.log`: modules → interface after 1 s → reg
+      domain → rfkill → `wpa_supplicant.conf` → `allow-hotplug` → associated
+      after 5 s → card cleared.
 
 ## Phase 5 — harden & package ([DOC/07](DOC/07-phase5-harden-package.md))
 
-- [ ] Clean the FAT partition before imaging — the dev Pi has accumulated
-      `config.txt.bak-{audio-310,disbt,quiet,x16}`,
-      `cmdline.txt.bak-{btquiet,edidfw,quiet}`, `config.txt.bak-x16wifi`, plus a
-      Windows `System Volume Information` folder. All would ship to end users.
+The release itself is now scripted end to end — `scripts/release/`, driven from
+Windows by `make-release.ps1` through WSL. What's left is running it on an image
+that's actually ready.
 
-- [ ] Harden the SD card with **`log2ram`** (not the read-only overlay — it would
-      silently discard SAVEs into the ext4 library; see DOC/07 Part A2). Then pull
-      power mid-session several times and confirm it still boots clean.
-- [ ] Capture the image: `dd` → PiShrink → `x16-appliance-r49.img.gz`.
-- [ ] Verify by flashing a **blank** card and booting a second Pi through Gate 3.
+- [x] **Clean the FAT partition before imaging** — automated in
+      `prep-image-source.sh` (dry-run by default) and asserted by
+      `check-image.sh`. The dev Pi still has all eleven `config.txt.bak-*` /
+      `cmdline.txt.bak-*` files and `System Volume Information`; they are also
+      still inside `x16RasPi4-try6.gz`.
+- [x] **Re-arm DietPi's first-boot resize before every capture.** Its first act
+      is to delete its own `WantedBy` symlink, so it reads `disabled` on any Pi
+      that has booted twice, and an image captured from one never expands.
+      `prep-image-source.sh` does it; `check-image.sh` fails the image without
+      it. **Power off, don't reboot** — a reboot disarms it again.
+- [x] **PiShrink vendored** at a pinned commit in `tools/pishrink/`, always
+      invoked `-s -n`: its own autoexpand is Raspberry Pi OS shaped
+      (`/etc/rc.local` + `raspi-config`, neither of which exists on DietPi).
+
+- [x] **Harden the SD card — already done, nothing to install.** DietPi ships its
+      own RAMlog and has it on by default: `/var/log` is a 50 MB tmpfs straight
+      from `/etc/fstab`, verified on the dev Pi and in a built image. The old
+      plan here (`dietpi-software install 137`, log2ram) was **wrong** — it would
+      have layered a second log-in-RAM system onto one already running. Not the
+      read-only overlay either: it would silently discard SAVEs into the ext4
+      library *and* the Wi-Fi credentials the applier now stores there (DOC/07
+      Part A2). `check-image.sh` fails an image whose `/var/log` is not a tmpfs.
+- [ ] Still to do: pull power mid-session several times and confirm it boots clean.
+- [ ] **The serial console is off, but DietPi still thinks it should be on.**
+      Checked on the dev Pi 2026-07-29:
+
+      | | |
+      |---|---|
+      | `serial-getty@ttyS0` | `disabled` / `inactive` — correct |
+      | `cmdline.txt` | `console=tty1` only, no `console=ttyS0` — correct |
+      | `dietpi.txt` | **`CONFIG_SERIAL_CONSOLE_ENABLE=1`** — disagrees |
+
+      `trim-boot.sh` turned the unit off (it was waiting out a 90 s device
+      timeout every boot — see the boot-time section below), but nothing changed
+      DietPi's own setting. `dietpi-config` and DietPi updates read that key and
+      run `dietpi-set_hardware serialconsole`, so the getty can come back on its
+      own, on a shipped unit, and the symptom is a silent 90 s stall.
+      Decide and make the two agree before capture — almost certainly by setting
+      `CONFIG_SERIAL_CONSOLE_ENABLE=0`, since nothing here uses a serial console.
+      `check-image.sh` now asserts both halves (unit not enabled = FAIL, setting
+      disagreeing = WARN) and flags this on the current build, so it cannot drift
+      back unnoticed.
+      Related: `enable_uart=1` is in `config.txt` (it pairs with
+      `dtoverlay=disable-bt`); it does not create a getty by itself, so it is not
+      the boot-time problem — worth confirming rather than assuming.
+      On a **Pi 3** this needs care: `ttyS0` there may be a genuine console
+      rather than the not-ready mini-UART it is on a Pi 4.
+
+- [x] **Re-captured with the Wi-Fi fixes: `x16-appliance-r49.img.gz`, 574 MB,
+      `sha256 f4699073925346ce3b22abf52560093142aa82d5e10117f12404b6583a3de962`**
+      (2026-07-29, second capture of the day). Taken from the *8 GB test card*,
+      not the 4 GB golden master — that card is byte-for-byte the golden card's
+      content plus the four applier fixes, so capturing it kept the 4 GB card
+      untouched as a rollback instead of consuming it.
+      `prep --apply` (20 changes) → capture 7.96 GB in 936 s at 8.5 MB/s →
+      check → PiShrink 7.5 G → 2.4 G → compress. Full audit re-run on the
+      *decompressed shipped artifact*: **no failures, 2 warnings** (the serial
+      setting and the SSH host keys, both open decisions below).
+      **The disk-id trap fired again and the fix caught it:** PiShrink rewrote
+      the signature `0x6a31ef16 → 0xaa6ff0b5`, `shrink-image.sh` restored it, and
+      the post-shrink re-check confirmed `root=PARTUUID=6a31ef16-02` still
+      resolves. Without that restore this would have been a second unbootable
+      image, identical in symptom and just as silent. `resize2fs -M` landed at
+      594519 blocks against the 590005 that `resize2fs -P` predicted.
+      **Flashed and booted clean on the Pi 4 (2026-07-29).** Boot #1 of the new
+      image: the resize genuinely expanded this time — 594519 → 1910784 4k
+      blocks, so `df` shows 7.2 G root with 5.5 G free — where the previous
+      card's resize was a no-op because it came from an already-expanded source.
+      Emulator launched at 9.73 s. FAT 97 MB free, drop folder bound, 26-entry
+      library present.
+      The two fixes that mattered are confirmed from a cold flash:
+      `x16-wifi-status.txt` **exists out of the box** reading "Wi-Fi is not set
+      up… nothing is wrong - this is how a new card comes", and both Wi-Fi
+      off-switches ship intact (overlay + module blacklist, `eth0` only).
+      Zero dev-Pi residue: no `.bak` files, no `wpa_supplicant` configs, blank
+      card, empty `bash_history`. The only two files under `/opt/x16` and
+      `/root/.cache` that look like litter (`.x16-wifi-status.last`, the mesa
+      shader cache) were **regenerated this boot** — mtimes 07:25 and 07:26
+      against 05:47 for the shipped files — so prep did remove them.
+      Keep `x16-appliance-r49-128fat.img.gz` as the rollback until the Pi 3 leg
+      passes; it differs only by the applier fixes.
+
+- [x] **Capture the image: done end to end 2026-07-29 (superseded by the
+      re-capture above, which carries the Wi-Fi fixes).**
+      `prep --apply` → capture over SSH (3.997 GB, 412 s, 9.7 MB/s) → refit to
+      256 MB → check → PiShrink. Result: **`x16-appliance-r49.img.gz`, 578 MB**,
+      `sha256 2285ae279f017a958b823422592ef0620f4fad9c9ccc6da86e0014814ceff544`.
+      Ship check on the unpacked artifact: **no failures, 2 warnings** (SSH host
+      keys baked in; the serial-console setting above). PiShrink logged
+      "Skipping autoexpanding process..." as intended, and repaired the live
+      capture's dirty journal on the way through, as predicted.
+- [x] **Pi 4 leg passed, 2026-07-29** — `x16-appliance-r49-128fat.img.gz` on a
+      blank 8 GB card, inspected over SSH on boot #1 (uptime 128 s, one boot ID
+      in the journal, so all of this is genuinely first-boot behaviour):
+      | Checked | Result |
+      | --- | --- |
+      | `root=PARTUUID=6a31ef16-02` resolves | disk id `0x6a31ef16` — the trap above is closed |
+      | auto-expand | p2 2.3 G → 7.3 G, `df` root 7.2 G, 5.5 G free |
+      | FAT | 131 MB, 34 MB used, **97 MB free** — matches the README's "around 100 MB" |
+      | emulator | running, `-fullscreen -scale 3 -widescreen -joy1`, launch at 10.05 s |
+      | boot | 1.6 s kernel + 16.1 s userspace; `custom.sh` in at 8.87 s |
+      | `FAT-FILES` bind mount | live, `p1[/x16]` → `/mnt/x16/FAT-FILES` |
+      | DietPi-RAMlog | `/var/log` tmpfs, 50 MB |
+      | Wi-Fi credentials | none — `dietpi-wifi.txt` blank, `/etc/wpa_supplicant` stock only |
+      | radio | `dtoverlay=disable-wifi` honoured, `eth0` only |
+      | serial getty | `ttyAMA0` masked, `ttyS0` disabled |
+      | splash + EDID | all three blobs and both EDIDs present |
+      Note the clock jumps around in the journal (05:17 → 05:59 → 07:01) because
+      fake-hwclock restores the build-time clock and NTP then corrects it
+      mid-boot. Only the uptime-relative figures in `x16-appliance.log` mean
+      anything; wall-clock deltas in `systemctl status` are noise.
+- [ ] **Pi 3 leg** — the same card into the Pi 3 for Gate 5's second-Pi
+      requirement, plus non-HDMI display detection and the Pi 3's different Wi-Fi
+      chip. Note the image ships `X16_OUTPUT=1080p` / `hdmi_mode=16`; if the TV
+      needs it, `X16_OUTPUT=720p` in `x16.conf` is a card edit, not a re-image —
+      the 720p EDID and the 1280x720 splash blob are both already in the image.
+      The clone is a full system with SSH, so iterate on *it* over SSH rather
+      than re-capturing — the dev card stays a golden master.
+
+- [ ] **Consume-and-clear empties the FILE; it does not scrub the CARD.**
+      Measured on the cold-flashed card 2026-07-29, after a real join:
+      | offset | contents |
+      | --- | --- |
+      | 36,317,407 | the live `x16-wifi.conf` — blank, as intended |
+      | 68,192,405 | `X16_WIFI_SSID=kentwa` / `X16_WIFI_PSK=rocket123`, intact |
+      `grep -c rocket /dev/mmcblk0p1` finds it; nothing at the filesystem level
+      does. The cause is **the Windows editor, not our scrub**: editors save
+      atomically — write a fresh copy, then repoint the directory entry — so by
+      the time the applier rewrites `x16-wifi.conf`, the plaintext is sitting in
+      a cluster the file no longer owns. Overwriting the file in place, however
+      carefully, cannot reach it. Only wiping the FAT's free space can.
+      `dist/README-end-user.md` no longer claims the password is cleared "off
+      the card" (it said that, and it was false) and now tells an owner to
+      reformat before giving the card away.
+      **Decision needed** — leave it, or wipe free space after a successful join:
+      ~97 MB of writes once per Wi-Fi setup, backgrounded so it does not delay
+      the emulator, needing a headroom margin so an owner's `SAVE` cannot hit
+      disk-full mid-wipe and a startup guard to delete the fill file if the power
+      is cut during it. Cheap in card wear; the failure modes are the real cost.
+
+- [x] **DietPi disables Wi-Fi TWICE, and we only ever undid one of them — fixed
+      2026-07-29.** Removing `dtoverlay=disable-wifi` puts the chip back on the
+      SDIO bus (`dmesg`: "mmc1: new high speed SDIO card at address 0001") but
+      `/etc/modprobe.d/dietpi-disable_wifi.conf` blacklists `brcmutil`,
+      `brcmfmac` and `cfg80211`, so the driver never binds. The applier waited
+      its 20 s, found no interface, and told the owner **"This Pi does not
+      appear to have Wi-Fi"** — on a Pi 4 with working onboard Wi-Fi, whose AP
+      was in range the whole time. A hand `modprobe brcmfmac` produced `wlan0`
+      instantly, which is what identified it.
+      The applier now removes the blacklist (renamed to `.bak-x16wifi`, inert
+      because modprobe.d only reads `*.conf`) and loads the listed modules in
+      reverse file order — `cfg80211` before the driver that needs it. It reads
+      the module names back out of the file rather than hardcoding `brcmfmac`,
+      so a USB adapter takes the same path. Done *before* the reboot branch, so
+      the next boot autoloads from the SDIO modalias and the interface is simply
+      there. `prep-image-source.sh` restores the blacklist, re-comments
+      `allow-hotplug wlan0`, and clears the `.bak-x16wifi` files, so a Pi used to
+      test Wi-Fi can still be captured as a clean Ethernet-only image.
+      Worth generalising: **a feature switched off by a distro is usually
+      switched off in more than one place.** We verified the overlay handling
+      worked and stopped looking.
+
+- [x] **A blank card means two opposite things — caught 2026-07-29, on the boot
+      right after the first successful join.** Writing a status file on the
+      blank-SSID path (see below) meant a Pi that had *just* connected and
+      cleared its own card was then told "Wi-Fi is not set up, so the Pi is
+      using the network cable" — overwriting "Connected to kentwa" with a flat
+      contradiction. Blank now disambiguates on the saved network in
+      `wpa_supplicant.conf`: with one, it reads "Wi-Fi is already set up for
+      *ssid*… this file looks blank, that is normal and it means it worked".
+      Deliberately not phrased as "connected": the applier runs before
+      association, so a live connection there would be a guess.
+
+- [x] **CRLF from a Windows editor silently broke the whole Wi-Fi path — fixed
+      2026-07-29.** `x16-wifi.conf` was sourced straight off the card. The file
+      exists *specifically* to be edited on a Windows PC, and an editor that
+      saves CRLF leaves a trailing `\r` inside every value. Measured on the Pi:
+      the SSID becomes `MyNetwork\r`, `wpa_passphrase` then dies with "Invalid
+      passphrase character", and `wpa_supplicant.conf` is written with a header
+      and **no network block** — so the Pi never associates, the card is never
+      cleared, and the owner is told to check a password that was right all
+      along. The country gate rejects `US\r` too and silently falls back.
+      Now sources a CR-stripped copy, which keeps shell quoting working so
+      `X16_WIFI_SSID="My Home Network"` still parses.
+      **This one cannot be caught on a dev box:** git-bash/MSYS strips CR when
+      sourcing, so the local test passed while the appliance failed. Reproduce
+      shell-parsing bugs on the target, not on Windows.
+      Same fix added a passphrase length gate (WPA needs 8–63 characters) —
+      outside that range `wpa_passphrase` refuses and produced the same empty
+      config and the same misleading "check your password".
+
+- [x] **Two applier defects found by the Pi 4 boot test, both fixed
+      2026-07-29** (in `scripts/x16-wifi-apply.sh`; the flashed card still runs
+      the old copy, so they need a redeploy before the Wi-Fi hardware test):
+      - **`x16-wifi-status.txt` was never created out of the box.** The blank-SSID
+        path `exit 0`-ed before calling `status()`, so on the state every card
+        ships in the file simply did not exist — while
+        `dist/README-end-user.md` §6 and its troubleshooting table both tell the
+        owner to go and read it. First instinct on a new card is to look, and
+        finding nothing reads as a broken card. Now written on that path too, and
+        `status()` is idempotent (previous body cached on ext4) so the steady
+        state is still **zero** FAT writes per boot — which matters for an
+        appliance switched off at the wall.
+      - **The rfkill unblock never actually ran.** `rfkill` is not in the image —
+        Bookworm ships it as its own package and DietPi does not pull it in — so
+        the `command -v rfkill` guard was always false and silently skipped the
+        unblock the script's own header calls mandatory on a Pi 3. Replaced with
+        direct `/sys/class/rfkill/*/soft` writes: no package dependency, works on
+        a card built offline, leaves Bluetooth alone, and logs a warning for a
+        HARD block (whose symptom is otherwise identical to a wrong passphrase).
 - [ ] Re-check [dist/README-end-user.md](dist/README-end-user.md) against the
       final image — especially the FAT drive's label and free space, which is the
-      first thing an owner sees.
+      first thing an owner sees. `check-image.sh` prints both. The `bootfs` label
+      claim was **wrong** and is corrected: try6's FAT has no volume label at all,
+      so Windows shows a bare drive letter.
+- [ ] Decide whether to give the FAT partition a volume label (`X16`?) at build
+      time. A named drive is a much better first impression than "Removable Disk
+      (E:)", and it costs one `fatlabel` call.
 
 ## Phase 4 leftovers (subjective — need eyes on the TV)
 
@@ -48,6 +309,68 @@ Running list of what's outstanding. Status of what's *done* lives in
 - [ ] Load something that scrolls and check for tearing / judder.
 
 ## Nice to have
+
+## Boot speed — candidates from Combian V3.0 / Dosbian V1.0 (read 2026-07-29)
+
+Read-only teardown of two mature Pi appliance distros on the NAS. Both are the
+same author's, off one pi-gen Raspbian Buster stage2 base (Feb 2020) — even the
+same disk id `0x738a4d67`, so treat them as one data point, not two.
+
+**What the teardown actually showed.** Dosbian is *not* a trimmed system: `cron`,
+`rsyslog`, `dhcpcd`, `wpa_supplicant`, `triggerhappy`, `nfs-client.target`,
+`rpi-eeprom-update`, `rsync`, `apt-daily`, `man-db` and `logrotate` are all still
+enabled, and its own menu offers "DISABLE DHCPCD: Speed up boot process" — they
+knew it cost them and shipped a user toggle instead of a fix. Its speed is
+largely **perceptual**: the splash paints in the first systemd transaction and is
+then never overwritten, so no boot text is ever seen. We already do that; they
+just protect the splash better. Our DietPi base is leaner than theirs.
+
+Caveat for the morning: this is all read from configuration. Nothing below has
+been booted or timed except where noted. Item 1 is the only one with a hardware
+effect; the rest are correctness/robustness wins that may cost nothing.
+
+- [ ] **1. `dtoverlay=sdtweak,overclock_50=100` — the one real lever, so measure
+      it first.** SD clock 50 → 100 MHz, roughly halving kernel + rootfs read
+      time. We have `boot_delay=0` already but nothing like this. It *is* an
+      overclock: marginal cards can corrupt, and the failure would be silent
+      filesystem damage rather than a clean refusal. Two mature distros shipping
+      it by default across all Pi models is real evidence, not proof.
+      Method: `systemd-analyze` + `x16-appliance.log`'s "launch at N s" before and
+      after, on the same card, cold boot each time. Revert if the gain is inside
+      the noise — this is not a change to take on faith.
+
+- [ ] **2. `console=tty3` instead of `quiet loglevel=0`.** Both images send the
+      kernel/systemd console to an unused VT and keep `loglevel=1`, rather than
+      silencing it. Two wins: a late kernel message can never land on top of the
+      splash, and **the boot log stays readable by switching VT**.
+      That second one is not theoretical for us — when the shrunk image would not
+      boot, the `rootwait` failure was invisible *precisely because* `quiet
+      loglevel=0` swallowed it, and our documented workaround is still "drop
+      `quiet` and re-flash". With `console=tty3` the message would have been
+      sitting on VT3 the whole time.
+      Check before adopting: that nothing we do assumes `console=tty1`, and that
+      the emulator's KMS modeset still lands on VT1.
+
+- [ ] **3. `TTYVTDisallocate=no` on `getty@tty1`.** This is what stops their getty
+      deallocating VT1 and wiping the splash. We repaint from `custom.sh` a third
+      time right before launch — check whether that repaint exists only to undo
+      VT deallocation. If so this replaces it, and we lose a moving part.
+
+- [ ] **4. Do we ship an initramfs?** Neither image has one at all. DietPi
+      Bookworm may; `ls /boot/firmware/initramfs*` on the running Pi settles it in
+      one command. If present, dropping it is real time on every boot.
+
+**Explicitly rejected — do not re-litigate:**
+
+- `elevator=deadline` (in both images): dead parameter on blk-mq kernels.
+- `fbi` for the splash: ours is better — pre-rendered RGB565 straight to
+  `/dev/fb0`, no package, no resident process. Theirs does auto-handle any
+  resolution where we ship three blobs and pick by framebuffer size; that is a
+  robustness edge, not a speed one, and not worth the dependency.
+- Their service set: we are already leaner.
+- `disable_splash=1`: they suppress the rainbow because their branded splash
+  arrives early enough to replace it. We chose `disable_splash=0` on purpose so
+  something appears at ~1 s. A real fork in the design, not an oversight.
 
 ## Boot time — DONE 2026-07-25 (x16emu launch 13.1 s → 6.2 s since kernel start)
 

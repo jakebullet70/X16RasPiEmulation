@@ -85,7 +85,7 @@ Power on → DietPi (no desktop, autologin tty1)
    to X16 with no shell visible.
 4. **Tune** — Exact HDMI 60 Hz, boot-time trimming (disable unused services),
    input mapping, `-fsroot` user folder on `/boot`.
-5. **Harden & package** — `log2ram` (or read-only overlay) to protect the SD
+5. **Harden & package** — DietPi-RAMlog (already on) or a read-only overlay to protect the SD
    card from power-cut corruption; then capture a shrunk, distributable `.img`
    (`dd` + PiShrink) — the "distro" artifact — plus a short README on adding
    `.prg` files.

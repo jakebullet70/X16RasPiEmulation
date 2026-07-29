@@ -49,7 +49,7 @@ Check: video fullscreen 60 Hz no tearing · keyboard types · audio out HDMI
 ```bash
 sudo install -m 0755 ~/scripts/custom.sh /var/lib/dietpi/dietpi-autostart/custom.sh
 sudo /var/lib/dietpi/dietpi-autostart/custom.sh   # test loop at console; relaunch-on-exit = correct
-sudo sed -i 's/^AUTO_SETUP_AUTOSTART_TARGET_INDEX=.*/AUTO_SETUP_AUTOSTART_TARGET_INDEX=17/' /boot/dietpi.txt
+sudo sed -i 's/^AUTO_SETUP_AUTOSTART_TARGET_INDEX=.*/AUTO_SETUP_AUTOSTART_TARGET_INDEX=17/' /boot/firmware/dietpi.txt
 #   (or: sudo dietpi-autostart -> 17 Custom script, no autologin)
 sudo reboot
 ```
@@ -65,15 +65,20 @@ sudo reboot
 > ### 🚩 GATE 4: 60 Hz locked + tear-free · boot visually silent · faster, no regression · gamepad persisted.
 
 ## ☐ Phase 5 — Harden & package (the deliverable)
-- **Harden (pick one):** `log2ram` via `dietpi-software` (writable) **or** read-only overlay via `dietpi-config` (sealed). Then pull power mid-session a few times → still boots clean.
-- **Image (on Linux / WSL Ubuntu / Pi+reader):**
+- **Harden:** already done — DietPi-RAMlog keeps `/var/log` in RAM by default (`findmnt /var/log` → tmpfs). Do **not** add `log2ram`. And **not** the read-only overlay, which would silently discard `SAVE`s into the ext4 library (doc 07 Part A2). Then pull power mid-session a few times → still boots clean.
+- **On the Pi, last thing before capture** — re-arms DietPi's first-boot resize (it disarms itself after every run, so a captured image would never expand) and strips our Wi-Fi creds, `.bak` litter and logs:
 ```bash
-lsblk -o NAME,SIZE,MODEL,TRAN                     # find whole card /dev/sdX (NOT a partition!)
-sudo dd if=/dev/sdX of=x16-appliance-r49.img bs=4M status=progress conv=fsync && sync
-wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh && chmod +x pishrink.sh
-sudo ./pishrink.sh -z x16-appliance-r49.img       # -> x16-appliance-r49.img.gz (auto-expands on first boot)
+sudo scripts/release/prep-image-source.sh            # dry run first, lists everything
+sudo scripts/release/prep-image-source.sh --apply
+sudo poweroff                                        # NOT reboot — that disarms the resize again
 ```
-- **Verify:** flash the `.img.gz` to a **blank** card, boot a second Pi → re-pass Gate 3. Ship with the end-user README (doc 07 Part C).
+- **Image (Windows → WSL Ubuntu; card in a reader, or over SSH):**
+```powershell
+.\scripts\release\make-release.ps1 -FromDevice /dev/sdb    # or -FromSsh x16raspi
+#   capture-image.sh -> check-image.sh -> shrink-image.sh (vendored PiShrink, -s -n -z)
+#   -> x16-appliance-r49.img.gz, ~600 MB
+```
+- **Verify:** flash the `.img.gz` to a **blank** card, boot a second Pi → re-pass Gate 3, and check `df -h /` shows the root expanded. Ship with the end-user README (doc 07 Part C).
 > ### 🚩 GATE 5: hardened + power-cut-survives · shrunk auto-expanding `.img.gz` boots a blank card through Gate 3.
 
 ---

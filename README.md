@@ -33,8 +33,14 @@ from [dietpi.com](https://dietpi.com/#download) and drop it in the repo root.
 
 - **Phases 1 & 2 passed on real Pi 4 hardware** (2026-07-23): KMS up, `x16emu`
   r49 + ROM installed to `/opt/x16`, X16 boots fullscreen with a working keyboard.
-- **Phase 3** (autostart appliance) deployed;
-- **Phases 4 & 5** authored and ready, in testing.
+- **Phase 3** (autostart appliance) deployed.
+- **Phase 4** essentially complete — 60 Hz locked, boot silenced and trimmed to
+  ~23 s power-on to `READY.`, gamepad working. Only the eyeball checks remain.
+- **Phase 5** is where the work is now: the release is scripted end to end
+  ([scripts/release/](scripts/release/)) and PiShrink is vendored. Hardening turned
+  out to be already done (DietPi-RAMlog keeps `/var/log` in RAM by default — the
+  earlier plan to install `log2ram` was wrong). What's left is cutting the image
+  with a 256 MB FAT partition and the second-Pi flash test.
 - The **black-screen saga is solved** — five stacked display causes diagnosed on
   hardware, with the fixes baked into the scripts and config here. If your screen
   is ever blank, read [DOC/08-display-fixes.md](DOC/08-display-fixes.md) first.
@@ -83,11 +89,13 @@ sudo reboot
 ## Repo layout
 
 ```text
-DOC/        phase runbooks, research, and the display-fixes post-mortem
-config/     boot-partition snippets + appliance settings and systemd units
-scripts/    install / launch / autostart / maintenance shell scripts
-tools/      EDID and splash-image generators (Python) and their output
-dist/       what ships to end users alongside the .img.gz
+DOC/               phase runbooks, research, and the display-fixes post-mortem
+config/            boot-partition snippets + appliance settings and systemd units
+scripts/           install / launch / autostart / maintenance shell scripts
+scripts/release/   cutting the shippable image: prep, capture, check, shrink
+tools/             EDID and splash-image generators (Python) and their output
+tools/pishrink/    PiShrink, vendored at a pinned commit
+dist/              what ships to end users alongside the .img.gz
 ```
 
 ### `scripts/`
@@ -106,6 +114,20 @@ dist/       what ships to end users alongside the .img.gz
 | [fetch-sdcard.sh](scripts/fetch-sdcard.sh) | Populates the `-fsroot` with the community SD-card tree (games, demos, BASIC) |
 | [setup-samba.sh](scripts/setup-samba.sh) | Shares the program folder on the LAN so you can drag-drop `.PRG`/`.BAS` files without pulling the card |
 | [smoke-test.sh](scripts/smoke-test.sh) | Headless install/launch check for a VM, container, or CI |
+
+### `scripts/release/`
+
+Cutting the distributable image. Windows entry point:
+`.\scripts\release\make-release.ps1 -FromDevice /dev/sdb` (or `-FromSsh <host>`),
+which runs the rest inside WSL Ubuntu.
+
+| Script | Runs on | What it does |
+| --- | --- | --- |
+| [prep-image-source.sh](scripts/release/prep-image-source.sh) | the Pi | Re-arms DietPi's first-boot resize (it disarms itself after every run) and strips Wi-Fi credentials, `.bak` litter, logs. Dry-run by default |
+| [capture-image.sh](scripts/release/capture-image.sh) | WSL / Linux | Reads the card to a raw `.img` — from a USB reader, or over SSH from a running Pi |
+| [refit-fat.sh](scripts/release/refit-fat.sh) | WSL / Linux | Rebuilds the capture with a bigger FAT partition — impossible on a live card, since the root's start has to move. Preserves PARTUUIDs and both filesystem UUIDs, so no `cmdline.txt`/`fstab` edits |
+| [check-image.sh](scripts/release/check-image.sh) | WSL / Linux | Read-only audit of a capture before it ships: resize armed, no credentials on either partition, autostart index, `/var/log` in RAM, FAT size and label |
+| [shrink-image.sh](scripts/release/shrink-image.sh) | WSL / Linux | Shrink + gzip through the vendored PiShrink (`-s -n`) |
 
 ### `config/`
 
@@ -130,12 +152,14 @@ blob that `x16-splash.sh` writes to the framebuffer.
 
 - **Load your own programs:** power off, put the SD card in any PC, and drop
   `.PRG` / `.BAS` files into the `x16/` folder on the small FAT drive that
-  appears. `DIR` and `LOAD` then see them from BASIC. To add programs without
-  pulling the card, `setup-samba.sh` exposes the same folder as `\\<pi>\X16`.
+  appears. Inside the X16 that folder is `FAT-FILES` (bind-mounted into the
+  library, which is the `-fsroot`): `@CD:FAT-FILES`, `@$` to list, then
+  `LOAD"NAME.PRG",8`. There is no `DIR` command. To add programs without pulling
+  the card, `setup-samba.sh` exposes the same folder as `\\<pi>\X16`.
   On the Pi that folder is `/boot/firmware/x16` — note that on Bookworm
   `/boot/firmware` is the FAT partition and plain `/boot` is ext4 root, so the
   scripts probe for the real FAT mount rather than assuming. It's small
-  (~128 MB), sized for a personal selection rather than the whole community
+  (256 MB in the shipped image), sized for a personal selection rather than the whole community
   library.
 - **Change the picture:** `sudo x16-display` over SSH — switch between widescreen
   and authentic 4:3, change scale or output resolution, toggle the forced EDID,
@@ -184,16 +208,34 @@ persistent, so the condition is false next boot — and it only reboots after
 verifying the edit stuck, since on a read-only or full card the write could fail.
 With no SSID set it exits in ~16 ms, so Ethernet-only machines pay nothing.
 
-**It coexists with DietPi's own tools rather than fighting them.** `dietpi-config`
-(Network Options) and `dietpi-wifi.txt` also own `wpa_supplicant.conf` and the
-overlay, so the card is treated as authoritative *only at the moment it changes*:
-a fingerprint stamp lives beside the config on the FAT partition, and an
-unchanged config means nothing is touched at all — whatever you set in
-`dietpi-config` stands. Without that, disabling Wi-Fi in `dietpi-config` while an
-SSID was still present would be undone by a surprise reboot on every boot. The
-stamp is on FAT, not `/var/lib`, so it survives the Phase 5 read-only overlay;
-under that overlay a `/var/lib` stamp would vanish each boot and the config would
-look changed forever.
+**The credentials are consumed, not stored.** Once a join actually succeeds, the
+applier clears `X16_WIFI_SSID` and `X16_WIFI_PSK` from the card and the only
+remaining copy is `wpa_supplicant.conf` on ext4, mode 0600. So the Wi-Fi password
+does not sit in plain text on a partition every PC can read for the life of the
+machine, and the owner's card returns to blank — which is also the "do nothing"
+state, so `dietpi-config`'s settings stand untouched from then on. A **failed**
+join deliberately leaves the file alone, so a typo'd passphrase stays on screen
+to be corrected. `X16_WIFI_COUNTRY` is always carried across the reset and never
+left blank: DietPi prints a boot-time warning without one, and the whole Phase 4
+premise is that nothing but the X16 is ever on screen.
+
+This replaced a fingerprint stamp (`.x16-wifi.state`) that had to be reasoned
+about at every turn — it could ship stale and make an owner's first edit look
+"unchanged" and be silently ignored. Blank-means-idle removes the failure mode
+rather than guarding against it. One accepted trade: an SSID that never
+associates, left on the card while Wi-Fi is *then* disabled in `dietpi-config`,
+gets the radio re-enabled and one reboot. It cannot loop, and cannot happen at
+all once a join has succeeded.
+
+**Either way it tells you what happened.** After any attempt the Pi writes
+`x16-wifi-status.txt` next to the config — plain language, CRLF for Notepad —
+saying it connected and on what address, or why it couldn't and what to check.
+That is the only feedback an owner with no shell can get.
+
+> The consume-and-clear design is **incompatible with the Phase 5 read-only
+> overlay** option: credentials would live only on ext4, be discarded at reboot,
+> and the card would already be blank — leaving Wi-Fi permanently unsettable.
+> The shipped image keeps the root writable (DietPi-RAMlog), where this is not an issue.
 
 Easiest route on a running Pi is `sudo x16-wifi`
 ([x16-wifi.sh](scripts/x16-wifi.sh)) — it shows the radio state up front, toggles
@@ -245,6 +287,11 @@ community SD-card contents come from [cx16forum/sdcard](https://github.com/cx16f
 This repo is only the Raspberry Pi appliance packaging around them — it downloads
 those upstream releases at install time rather than redistributing them, and they
 remain under their own licenses.
+
+One exception, deliberately: [PiShrink](https://github.com/Drewsif/PiShrink) by
+Drew Bonasera is **vendored** in [tools/pishrink/](tools/pishrink/) at a pinned
+commit, MIT-licensed, with its `LICENSE` alongside. A release build should be
+reproducible, and `wget`-ing a script off `master` at release time is not.
 
 ## License
 

@@ -37,14 +37,14 @@ evidence — almost nothing failed loudly.
 
 ## What genuinely gets better (more than we credited)
 
-- **Storage collapses into something simpler.** The entire 512 MB-FAT / ext4 /
+- **Storage collapses into something simpler.** The entire 256 MB-FAT / ext4 /
   bind-mount / `FAT-FILES` design in [`07`](07-phase5-harden-package.md) Part A2
   exists *only* because a Linux root needs ext4. Bare metal uses FatFs: one FAT32
   partition up to 32 GB, the whole card visible from a PC, library and user files
   together. No bind mount, no partition-sizing compromise, no `X16_FSROOT`, and
   the end-user README gets shorter.
 - **Power-cut hardening mostly evaporates.** Nothing writes unless the user types
-  `SAVE`. The whole log2ram-vs-read-only-overlay question disappears, along with
+  `SAVE`. The whole RAMlog-vs-read-only-overlay question disappears, along with
   its trap (an overlay silently discarding writes to the library).
 - Boot in ~2-3 s, and deterministic frame timing.
 

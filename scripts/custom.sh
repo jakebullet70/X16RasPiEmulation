@@ -47,7 +47,7 @@ up() { cut -d' ' -f1 /proc/uptime; }
 log "custom.sh entered at $(up)s since boot"
 
 # ---- PC-visible drop folder -------------------------------------------------
-# The FAT partition is small (512 MB in the shipped image); the bundled library
+# The FAT partition is small (256 MB in the shipped image); the bundled library
 # is ~250 MB and lives on the roomy ext4 root. x16emu accepts only ONE -fsroot,
 # so when the fsroot is on ext4 the FAT folder is bind-mounted INTO it as a
 # subdirectory: the owner's PC sees one small drive, the X16 sees the library at

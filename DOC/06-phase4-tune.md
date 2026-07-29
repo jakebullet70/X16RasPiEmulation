@@ -129,6 +129,15 @@ Where the 18 s actually goes: ~8.3 s to `getty@tty1`, of which **4.7 s is
 drop-in dropping `After=network.target` from `systemd-user-sessions.service`
 would reclaim most of it, at the cost of fighting the distro's ordering.
 
+> **Superseded 2026-07-25 — this 18 s is not the current number.** That `ifup`
+> lever was pulled, along with three others, taking power-on to `READY.` to
+> **23 s** on the owner's stopwatch and the emulator's launch to **6.3 s** after
+> kernel start. One correction that matters if you retrace this: a **drop-in
+> cannot** remove the ordering — systemd registers the mirrored `Before=` edge
+> on the other unit while parsing, and that survives. It needs a full unit
+> override. All of it is in [`scripts/trim-boot.sh`](../scripts/trim-boot.sh)
+> and the boot-time section of [`../TODO.md`](../TODO.md).
+
 Disabled on the dev Pi (no user-visible effect): `samba-ad-dc` (a domain
 controller; the file share only needs `smbd`/`nmbd`), `triggerhappy` + its socket,
 `systemd-pstore`. Also set `AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0` in `dietpi.txt`.
@@ -196,7 +205,7 @@ it's frictionless before packaging.
   images, so both layouts work.
 - Drop a `.prg` into that `x16/` folder from another PC, boot the Pi, and confirm
   `DIR` lists it and `LOAD"NAME"` + `RUN` works inside the X16.
-- Space check: the FAT partition is small (~128 MB on a stock image). It's sized
+- Space check: the FAT partition is small (~128 MB on a stock image, 256 MB once refit-fat.sh has run). It's sized
   for a personal selection of programs, not the whole community library — see
   `fetch-sdcard.sh --dest` if you want the big collection on the ext4 root.
 
@@ -213,7 +222,7 @@ the X16 with no in-emulator setup.
 - `-fsroot` drop-a-file workflow confirmed end to end.
 
 ## Next (Phase 5 preview)
-Protect the SD card from power-cut corruption (`log2ram` or a read-only overlay),
+Protect the SD card from power-cut corruption (DietPi-RAMlog, already on by default),
 then capture the tuned system as a shrunk, distributable `.img` (`dd` + PiShrink)
 and write the end-user README for adding programs. See `07-phase5-harden-package.md`.
 

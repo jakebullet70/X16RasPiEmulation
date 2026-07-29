@@ -3,6 +3,9 @@
 *.img.xz
 *.img.gz
 *.zip
+# Hand-named build attempts kept in the repo root — 600 MB each, and three of
+# them were sitting untracked.
+x16RasPi4-tr*.*
 
 # Generated splash blobs (6.4 MB of build artifacts).
 # Regenerate with tools/make-splash-assets.sh; all three must be in the image.
