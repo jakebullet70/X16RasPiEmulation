@@ -62,7 +62,7 @@ FAT="$(boot_fat)"
 # The regulatory domain every owner gets unless they edit x16-wifi.conf. It has
 # to be the same in all four places or DietPi can change it under a shipped unit
 # (see the country block below); check-image.sh asserts the agreement.
-SHIP_COUNTRY="US"
+SHIP_COUNTRY="GB"
 # The name Windows shows for the card's drop drive. Set on the IMAGE rather than
 # here — /boot/firmware is mounted and bind-mounted into the running emulator, so
 # relabelling it live is not reliably persistent. scripts/release/set-fat-label.sh.
@@ -262,6 +262,32 @@ shopt -u nullglob
 [ -f "$FAT/x16.conf" ] || note "!! $FAT/x16.conf missing — display settings won't be editable from a PC"
 [ -f "$FAT/x16/README.TXT" ] || note "!! $FAT/x16/README.TXT missing — install dist/fat-x16-README.TXT there"
 
+# DietPi's own idea of whether a serial console should exist has to agree with
+# reality, or it will helpfully put one back. `trim-boot.sh` disabled
+# serial-getty@ttyS0 because it was waiting out a 90 s device timeout on EVERY
+# boot — multi-user.target did not activate until 92.9 s — but nothing changed
+# this key, and dietpi-config or any DietPi update reads it and runs
+# dietpi-set_hardware serialconsole. So a shipped unit can grow a serial getty by
+# itself, and the symptom is a silent 90 s stall before the X16 appears.
+#
+# Settled once the project narrowed to the Pi 4 (2026-07-30). It had been left
+# open only because on a Pi 3 `ttyS0` can be a genuine console rather than the
+# not-ready mini-UART it is on a Pi 4, which made blanket-disabling risky. No Pi 3,
+# no risk. Nothing here uses a serial console.
+#
+# Note `enable_uart=1` in config.txt stays: it pairs with dtoverlay=disable-bt and
+# does not create a getty by itself. Verified, not assumed.
+for dt in "$FAT/dietpi.txt" /boot/dietpi.txt; do
+  [ -f "$dt" ] || continue
+  sc=$(sed -n 's/^CONFIG_SERIAL_CONSOLE_ENABLE=//p' "$dt" | head -1 | tr -d '\r')
+  if [ "$sc" = 0 ]; then
+    note "$dt already says CONFIG_SERIAL_CONSOLE_ENABLE=0"
+  elif [ -n "$sc" ]; then
+    note "$dt says CONFIG_SERIAL_CONSOLE_ENABLE=$sc but the getty is off — DietPi would put it back"
+    run sed -i 's/^CONFIG_SERIAL_CONSOLE_ENABLE=.*/CONFIG_SERIAL_CONSOLE_ENABLE=0/' "$dt"
+  fi
+done
+
 # ---- 4. logs and history ----------------------------------------------------
 echo
 echo "[4] logs and history"
@@ -282,6 +308,57 @@ shopt -u nullglob
 # this is pure build-machine residue — and it grows with every boot we do here.
 [ -d /root/.cache/mesa_shader_cache_db ] && run rm -rf /root/.cache/mesa_shader_cache_db
 [ -d /root/.cache/mesa_shader_cache ] && run rm -rf /root/.cache/mesa_shader_cache
+
+# /root itself. Every session that iterates over SSH leaves working files here —
+# benchmark output, "keep the old one just in case" copies, staging tarballs,
+# install logs. Found 2026-07-30: 2.2 MB of it, including sdbench results, an
+# orphaned x16-wifi-apply.bak-*, x16-pull.tgz / x16scripts.tgz staging archives
+# and a config.txt saved before the SD-overclock test. None of it is dangerous;
+# all of it is somebody else's mess arriving inside a product.
+#
+# Deliberately a NAMED LIST rather than "empty /root": the dotfiles there are real
+# (.bashrc, .profile, .hushlogin, .ssh) and blowing them away would change how a
+# shipped unit behaves. Anything unrecognised is REPORTED for a human to judge,
+# not deleted — see the survey below.
+shopt -s nullglob
+for f in /root/sdbench*.txt /root/sdbench*.sh /root/oc100.log \
+         /root/config.txt.orig-* /root/config.txt.bak* \
+         /root/custom.sh.prev-* /root/custom.sh.bak* \
+         /root/x16-wifi-apply.bak-* /root/prep-image-source.sh \
+         /root/x16-pull.tgz /root/x16scripts.tgz /root/install.log \
+         /root/x16-backup-* /root/x16-pull /root/x16-deploy; do
+  run rm -rf "$f"
+done
+shopt -u nullglob
+
+# Survey what is left, so litter this list does not know about cannot ship silently.
+# Must skip everything the loop above handles, or a DRY RUN reports all of it as
+# unknown — nothing has actually been deleted yet at that point, and a survey that
+# cries wolf about 13 already-handled files is worse than no survey.
+leftover=""
+for f in /root/*; do
+  b=$(basename "$f")
+  case "$b" in
+    scripts) continue ;;                      # DietPi's own staging dir, left on purpose
+    sdbench*|oc100.log|install.log) continue ;;
+    config.txt.orig-*|config.txt.bak*) continue ;;
+    custom.sh.prev-*|custom.sh.bak*) continue ;;
+    x16-wifi-apply.bak-*|prep-image-source.sh) continue ;;
+    x16-pull|x16-pull.tgz|x16scripts.tgz|x16-deploy|x16-backup-*) continue ;;
+    *) leftover="$leftover $b" ;;
+  esac
+done
+[ -n "$leftover" ] && note "!! unrecognised in /root, decide before capture:$leftover"
+
+# NOT touched, because removing it would lock you out of every shipped unit:
+# /root/.ssh/authorized_keys. It holds the BUILD MACHINE's public key, so whoever
+# built the image can SSH into every unit flashed from it. That is how this whole
+# project is debugged, so it is plausibly intentional — but it is a different and
+# larger question than the shared dropbear HOST keys (those let a unit be
+# impersonated; this lets a unit be entered). Decide it on purpose.
+if [ -s /root/.ssh/authorized_keys ]; then
+  note "!! /root/.ssh/authorized_keys ships $(grep -c . /root/.ssh/authorized_keys) key(s) — the builder can SSH into every unit. Left in place; remove by hand if that is not wanted."
+fi
 
 # dietpi-ramlog_store is a DIRECTORY, not a log file — it is where DietPi-RAMlog
 # persists /var/log across reboots, and the service expects it to exist. Empty

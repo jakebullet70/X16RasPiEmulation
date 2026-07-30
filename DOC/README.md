@@ -60,6 +60,10 @@ the Commander X16 emulator.
 - `../scripts/smoke-test.sh` — headless install/launch check for VM/container/CI.
 - `../config/x16.conf` — appliance display/audio settings (boot partition,
   editable from any PC).
+- `../config/98-x16-console.conf` — `kernel.printk` console level 1, deployed to
+  `/etc/sysctl.d/`. Numbered 98 to beat DietPi's `97-dietpi.conf`, which sets it
+  to 4 and overrides the kernel command line; at 4 a late `KERN_ERR` is printed to
+  the foreground VT and fbcon repaints the console over the running emulator.
 - `../tools/gen_edid.py` — generates the forced 1080p-only CEA EDID
   (`x16-1080p.edid`) that fixes the black-screen-on-DMT problem.
 - `../dist/README-end-user.md` — the plain-language README that ships alongside
@@ -264,23 +268,45 @@ the Commander X16 emulator.
   volume serial and MBR disk id are untouched — `/etc/fstab` mounts
   `/boot/firmware` by that serial. Tested against a synthetic card image
   including the dirty-bit case a live capture always carries.
-- **Resume point:** flash `x16-appliance-r49.img.gz` to a blank card and boot it —
-  the **Pi 4 first**, so a failure can only be the Wi-Fi rewrite, then the same
-  card into the **Pi 3** for Gate 5's second-Pi requirement plus the 720p splash
-  and non-HDMI display paths. The clone has SSH, so iterate on it rather than
-  re-capturing; the dev card stays a golden master.
+- **Resume point (2026-07-30): re-capture, then two checks with the TV on.**
+  The dev Pi now carries everything decided today — country `US` in all five
+  places, the owner-facing `x16-wifi.conf`, and `custom.sh` with the relaunch
+  backoff — so the outstanding work is a fresh `prep --apply` → capture →
+  `set-fat-label.sh --label X16PI` → `check-image.sh` → shrink. The currently
+  shipped `.gz` predates all of it and `check-image.sh` fails it.
+  Then the only two things left need eyes on the screen: a cold boot with nothing
+  stray on it before the splash, and a scrolling demo checked for tearing.
+
+## Scope: Pi 4 only
+
+**Narrowed to the Raspberry Pi 4 on 2026-07-30.** The Pi 3 leg was prepared
+(720p and 640x480 splash blobs, non-HDMI display detection) but never run on
+hardware, so two-model support is not a claim this project makes. Nothing in the
+image is Pi-4-specific and a Pi 3 would very likely boot it — untested is not the
+same as unsupported-by-design, and it is recorded as the former.
+Also waived knowingly: the Phase 5 gate's **"boot it on a second Pi"** step, since
+only one Pi 4 is available. A cold first boot from a blank card *is* verified, so
+the image is not leaning on build-card state; what is unproven is per-unit
+variation (different Pi 4 revision, card reader, TV EDID).
 
 ## Open questions
 
-- Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro.
-- The dev Pi's dropbear host keys are baked into the image. `--reset-host-keys`
-  regenerates them; dropbear runs without `-R` here, so simply deleting them
-  would ship an image with no SSH at all.
-- **`config/x16-wifi.conf` in the repo is not the file that ships.** The card and
-  the ext4 reset template carry a terse 7-line version (261 bytes); the repo's is
-  the 25-line owner-facing one with the "leave empty to stay on Ethernet",
-  country-examples and plain-text-warning comments. `prep-image-source.sh` builds
-  the template from *the card*, so the repo copy has never been deployed. Since
-  `dist/README-end-user.md` sends the owner into this file to edit it, the
-  in-file guidance is the guidance — decide whether to push the repo version onto
-  the card before capture.
+- Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro,
+  but the shipped `.gz` **predates the 2026-07-30 fixes** — it has `GB` in both
+  `dietpi.txt` copies and no FAT volume label, so `check-image.sh` now fails it.
+  Re-capture before shipping.
+- Host keys: **decided — ship as-is.** Every unit shares the dev Pi's SSH
+  identity. Accepted knowingly: SSH is a service-tool path on a shell-less
+  appliance, and deleting the keys ships an image with no SSH at all (dropbear
+  runs without `-R`). `check-image.sh`'s WARN is the record of the decision.
+- **`config/x16-wifi.conf` drift: FIXED 2026-07-30.** The card and the ext4 reset
+  template had carried a terse 7-line version (261 bytes) while the repo's
+  owner-facing file — the one with "leave empty to stay on Ethernet", the country
+  examples and the plain-text warning — had never been deployed at all, even
+  though `dist/README-end-user.md` sends the owner into that file to edit it. The
+  repo version (26 lines, 1135 bytes) is now on the card and the template is
+  rebuilt byte-identical from it. `check-image.sh` now **fails** an image whose
+  `x16-wifi.conf` lacks the owner-facing header, or whose template and card copy
+  differ — the latter matters because the applier rebuilds the card from the
+  template *after a successful join*, so a mismatch would swap the owner's file
+  behind their back later rather than at capture.

@@ -1,6 +1,7 @@
 # Phase 5 — Harden & Package (the distributable image)
 
-_Written: 2026-07-22 · Target: Raspberry Pi 3 / 4 · Base: DietPi arm64 (Bookworm)_
+_Written: 2026-07-22 · Target: **Raspberry Pi 4** (narrowed from Pi 3 / 4 on
+2026-07-30) · Base: DietPi arm64 (Bookworm)_
 
 The appliance now boots straight into a tuned X16. Phase 5 makes it **durable**
 (survive having mains yanked mid-run — the classic Pi-appliance failure mode) and
@@ -400,7 +401,17 @@ boot a Pi from it, and re-run the Phase 3 gate:
 - root partition auto-expanded (`df -h /`), `/var/log` still a tmpfs.
 
 **Gate (package):** the shrunk `.img.gz`, flashed to a blank card, reproduces the
-full appliance on a second Pi.
+full appliance.
+
+> **The "second Pi" half of this gate is WAIVED, knowingly (2026-07-30.)** There
+> is only one Pi 4 available, so the image cannot be proved on hardware other than
+> the machine it was built from. What *is* verified is the part that catches the
+> failure this gate exists for: the image was flashed to a **blank** card and
+> booted from cold, first boot, with the root filesystem auto-expanding and every
+> identifier resolving — so it is not depending on state that only exists on the
+> build card. What remains unproven is per-unit variation (a different Pi 4
+> revision, a different card reader, a different TV's EDID).
+> Recorded as an accepted risk, not as a pass.
 
 ---
 
@@ -413,7 +424,7 @@ release (especially the FAT drive's label and free space, which the user sees).
 It covers only what a user needs:
 
 1. **Flash it** — Raspberry Pi Imager → "Use custom image" → the `.img.gz` → your
-   SD card. Pi 3 or Pi 4.
+   SD card. Pi 4.
 2. **First boot** — plug in HDMI + USB keyboard + power; it boots straight to the
    Commander X16 `READY.` prompt. First boot auto-expands the card (a few extra
    seconds, once).
@@ -434,7 +445,9 @@ It covers only what a user needs:
 - SD card hardened (DietPi-RAMlog **or** read-only overlay) and survives power-cut
   testing.
 - A shrunk, auto-expanding `x16-appliance-r49.img.gz` exists and has been verified
-  by flashing to a **blank** card and booting a second Pi through the Phase 3 gate.
+  by flashing to a **blank** card and booting it through the Phase 3 gate. The
+  "second Pi" half is waived — only one Pi 4 is available (see the package gate
+  above); accepted as a risk rather than counted as a pass.
 - An end-user README ships with the image.
 
 ## Update path (post-1.0)

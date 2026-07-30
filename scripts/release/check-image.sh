@@ -126,14 +126,56 @@ SGETTY=$(find "$MNT_ROOT/etc/systemd/system" -name 'serial-getty@*.service' -pat
   || pass "no serial-getty enabled"
 # The unit being off is not enough: DietPi's own setting is what dietpi-config
 # and DietPi updates act on, so a stale =1 can turn the getty back on later.
-SC=$(grep -oE '^CONFIG_SERIAL_CONSOLE_ENABLE=[0-9]+' "$MNT_FAT/dietpi.txt" 2>/dev/null | cut -d= -f2)
-case "$SC" in
-  0) pass "dietpi.txt agrees: CONFIG_SERIAL_CONSOLE_ENABLE=0" ;;
-  "") warn "CONFIG_SERIAL_CONSOLE_ENABLE not set in dietpi.txt" ;;
-  *) warn "dietpi.txt still says CONFIG_SERIAL_CONSOLE_ENABLE=$SC while the getty
-      is off — the two disagree, and dietpi-config or a DietPi update will act on
-      the setting, bringing the 90 s boot stall back on a shipped unit" ;;
-esac
+#
+# FAIL, not WARN, since 2026-07-30. It was a judgement call only while a Pi 3 was
+# still a target — there `ttyS0` can be a real console rather than the not-ready
+# mini-UART it is on a Pi 4. Pi 4 only now, nothing uses a serial console, and
+# prep-image-source.sh sets this for both dietpi.txt copies, so a disagreement
+# means the prep step did not run rather than that somebody chose differently.
+# Checked on BOTH copies: Bookworm has /boot/dietpi.txt on ext4 and
+# /boot/firmware/dietpi.txt on the card, and they are separate files.
+for spec in "the card's dietpi.txt:$MNT_FAT/dietpi.txt" \
+            "ext4 /boot/dietpi.txt:$MNT_ROOT/boot/dietpi.txt"; do
+  sdt="${spec#*:}"; sname="${spec%%:*}"
+  [ -f "$sdt" ] || continue
+  SC=$(grep -oE '^CONFIG_SERIAL_CONSOLE_ENABLE=[0-9]+' "$sdt" 2>/dev/null | cut -d= -f2)
+  case "$SC" in
+    0) pass "$sname agrees: CONFIG_SERIAL_CONSOLE_ENABLE=0" ;;
+    "") warn "CONFIG_SERIAL_CONSOLE_ENABLE not set in $sname" ;;
+    *) fail "$sname says CONFIG_SERIAL_CONSOLE_ENABLE=$SC while the getty is off.
+      The two disagree, and dietpi-config or a DietPi update acts on the setting,
+      bringing the 90 s boot stall back on a shipped unit. prep-image-source.sh
+      fixes this — it has not been run, or was run without --apply." ;;
+  esac
+done
+# Kernel messages must not be able to repaint the console over the emulator.
+# DietPi's own /etc/sysctl.d/97-dietpi.conf sets kernel.printk console level to 4,
+# which beats the kernel command line, and at 4 any KERN_ERR is written to the
+# foreground VT — fbcon then repaints over whatever x16emu is showing. Observed on
+# hardware: a Wi-Fi regulatory error fired 2.5 s AFTER the emulator was up and
+# wiped it off the screen. Ours must sort AFTER DietPi's or it does nothing.
+X16SC="$MNT_ROOT/etc/sysctl.d/98-x16-console.conf"
+if [ -f "$X16SC" ]; then
+  lvl=$(sed -n 's/^[[:space:]]*kernel\.printk[[:space:]]*=[[:space:]]*//p' "$X16SC" | awk '{print $1}')
+  if [ "${lvl:-9}" -le 1 ] 2>/dev/null; then
+    pass "98-x16-console.conf sets console loglevel $lvl (sorts after DietPi's 97-)"
+  else
+    fail "98-x16-console.conf sets console loglevel '${lvl:-unset}'. At anything
+      above 1 a KERN_ERR still prints to the foreground VT and fbcon repaints the
+      console over the running emulator."
+  fi
+  # A file numbered at or below DietPi's would be silently overridden.
+  for lower in "$MNT_ROOT"/etc/sysctl.d/9[0-7]-*.conf; do
+    [ -f "$lower" ] || continue
+    grep -q '^[[:space:]]*kernel\.printk' "$lower" 2>/dev/null &&
+      info "note: $(basename "$lower") also sets kernel.printk — 98- wins, as intended"
+  done
+else
+  fail "no /etc/sysctl.d/98-x16-console.conf. DietPi's 97-dietpi.conf sets the
+      console log level to 4, so a late kernel error will repaint the console over
+      the X16 mid-session. Install config/98-x16-console.conf (scripts/trim-boot.sh
+      does it)."
+fi
 [ -f "$MNT_ROOT/opt/x16/rom.bin" ] && pass "rom.bin present" || fail "no /opt/x16/rom.bin"
 if [ -d "$MNT_ROOT/mnt/x16" ] && [ -n "$(ls -A "$MNT_ROOT/mnt/x16" 2>/dev/null)" ]; then
   pass "library at /mnt/x16 ($(du -sh "$MNT_ROOT/mnt/x16" 2>/dev/null | cut -f1))"
@@ -249,6 +291,34 @@ echo "-- the owner's first look --"
   && pass "Wi-Fi reset template at /opt/x16/x16-wifi.conf.original" \
   || warn "no /opt/x16/x16-wifi.conf.original — the applier will mint one from
       the card on first boot, so a mangled x16-wifi.conf becomes the template"
+# The card must carry the OWNER-FACING file, i.e. config/x16-wifi.conf from the
+# repo, not a stripped-down copy. This shipped wrong: the card and the template
+# both held a terse 7-line version (261 bytes) while the repo's 26-line file with
+# the "leave empty to stay on Ethernet", country-examples and plain-text warning
+# had never been deployed at all. dist/README-end-user.md sends the owner into
+# this file to edit it, so the comments in it ARE the instructions.
+if [ -f "$MNT_FAT/x16-wifi.conf" ]; then
+  if grep -q 'EDIT THIS FILE FROM ANY PC' "$MNT_FAT/x16-wifi.conf"; then
+    pass "x16-wifi.conf carries the owner-facing guidance"
+  else
+    fail "x16-wifi.conf on the card is missing its owner-facing comments (no
+      'EDIT THIS FILE FROM ANY PC' header). The owner is told to edit this file
+      and would find no guidance in it. Ship config/x16-wifi.conf from the repo."
+  fi
+fi
+# Both blank on a ship image, so they must be identical. If they differ, the
+# applier's post-join reset would silently swap the owner's file for the other
+# one — and that reset happens later, not at capture, so it would ship unnoticed.
+if [ -f "$MNT_FAT/x16-wifi.conf" ] && [ -f "$MNT_ROOT/opt/x16/x16-wifi.conf.original" ]; then
+  if cmp -s "$MNT_FAT/x16-wifi.conf" "$MNT_ROOT/opt/x16/x16-wifi.conf.original"; then
+    pass "the card's x16-wifi.conf and the ext4 reset template are byte-identical"
+  else
+    fail "the card's x16-wifi.conf and /opt/x16/x16-wifi.conf.original DIFFER.
+      Both should be the same blank file on a shipped image; the applier rebuilds
+      the card from the template after a successful join, so the owner's file
+      would change behind their back on the first Wi-Fi setup."
+  fi
+fi
 # A missing country code makes DietPi print a warning at boot, which breaks the
 # "nothing but the X16 is ever on screen" rule Phase 4 exists to enforce.
 #
@@ -259,7 +329,7 @@ echo "-- the owner's first look --"
 # can change under a shipped unit. A wrong country looks exactly like a wrong
 # password (association simply fails, or only 2.4 GHz works), so it is worth
 # asserting rather than eyeballing.
-SHIP_COUNTRY="US"
+SHIP_COUNTRY="GB"
 WIFI_CC=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$MNT_FAT/x16-wifi.conf" 2>/dev/null | head -1 | tr -d '\r')
 case "$WIFI_CC" in
   "$SHIP_COUNTRY") pass "x16-wifi.conf ships country '$WIFI_CC'" ;;

@@ -4,8 +4,8 @@ This SD card image turns a Raspberry Pi into a **Commander X16**. Switch it on a
 the X16 is there, fullscreen on your TV. Switch it off at the wall when you're
 done — there's nothing to shut down.
 
-You need: a **Raspberry Pi 3 or 4**, a micro-SD card (8 GB or larger), an HDMI
-cable, a USB keyboard, and a USB power supply.
+You need: a **Raspberry Pi 4**, a micro-SD card (8 GB or larger), an HDMI cable,
+a USB keyboard, and a USB power supply.
 
 ---
 
@@ -97,12 +97,12 @@ a keyboard or any commands — just edit a file on the card:
 2. Open **`x16-wifi.conf`** on the **X16PI** drive, in any plain text editor
    (Notepad is fine).
 3. Fill in your network name and password, and set your country if you are not
-   in the United States:
+   in the United Kingdom:
 
    ```text
    X16_WIFI_SSID=YourNetworkName
    X16_WIFI_PSK=YourPassword
-   X16_WIFI_COUNTRY=US
+   X16_WIFI_COUNTRY=GB
    ```
 
 4. Save, eject the card, put it back in the Pi, and power on.
@@ -126,8 +126,8 @@ are still in `x16-wifi.conf`, the Pi did *not* get connected.
 Notes:
 
 - The country code is required. Wi-Fi is regulated per country and the Pi won't
-  transmit properly until it knows where it is. It ships set to `US` — change it
-  if that is not where you are (`GB`, `DE`, `FR`, `AU`, …). Never leave it empty;
+  transmit properly until it knows where it is. It ships set to `GB` — change it
+  if that is not where you are (`US`, `DE`, `FR`, `UA`, …). Never leave it empty;
   the Pi keeps it when it clears the rest.
 - The network name is case-sensitive, and so is the password.
 - The password is in a plain text file until the Pi connects and empties it, so

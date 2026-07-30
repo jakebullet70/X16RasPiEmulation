@@ -1,8 +1,8 @@
 # Hardware Day — One-Page Run-Sheet
 
-_Pi 3/4 · DietPi arm64 Bookworm · x16emu **r49** · print this, keep the full docs open for troubleshooting_
+_Pi 4 · DietPi arm64 Bookworm · x16emu **r49** · print this, keep the full docs open for troubleshooting_
 
-**Have ready:** Pi 3/4 · SD card + PC reader · HDMI display · USB keyboard ·
+**Have ready:** Pi 4 · SD card + PC reader · HDMI display · USB keyboard ·
 Ethernet cable (or Wi-Fi creds) · the image `DietPi_RPi234-ARMv8-Bookworm.img.xz`
 (in repo root) · this repo's `config/` + `scripts/`.
 

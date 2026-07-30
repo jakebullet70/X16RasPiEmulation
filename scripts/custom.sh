@@ -215,6 +215,31 @@ fi
 
 AUDIO_DRIVER_DEFAULT="${SDL_AUDIODRIVER:-alsa}"
 
+# Consecutive instant exits, and the current wait between retries.
+#
+# Both exist because of a state an OWNER hits, not a fault: the TV is switched
+# off, or on another input, so no connector reads "connected", x16emu dies with
+# "SDL_Init failed: kmsdrm not available", and this loop retries. Measured on the
+# dev Pi 2026-07-30 with nothing plugged into HDMI: 626 relaunches in 32 minutes
+# on the old flat 3 s retry. That pins a core for as long as the unit is left on,
+# and at ~150 bytes a launch the log filled a 50 MB tmpfs in about a fortnight.
+# Verified after this change, same disconnected state: 66 attempts in 32 minutes
+# instead of 626, and 4 log lines per 150 s instead of ~50.
+# It must NEVER give up — the X16 has to appear when the TV finally comes on.
+#
+# Note what is NOT bounded: x16emu's own stderr is redirected into $LOG on every
+# attempt, so one "SDL_Init failed" line per retry still accumulates regardless of
+# noisy() below. At the 30 s cap that is ~115 KB/day against a 50 MB tmpfs — over
+# a year, versus a fortnight before — so it is left readable on purpose rather
+# than sent to /dev/null, because if the failure reason ever changes that line is
+# the only evidence of it.
+FAILS=0
+BACKOFF=0
+
+# Log the first few attempts (those are the diagnostic ones) and then only every
+# 20th, so a persistent failure leaves a heartbeat instead of a flood.
+noisy() { [ "$FAILS" -le 3 ] || [ $((FAILS % 20)) -eq 0 ]; }
+
 # Appliance relaunch loop. Re-reads config + re-asserts EDID every iteration so
 # the SSH tool can apply changes by just restarting x16emu (pkill -x x16emu).
 while true; do
@@ -249,7 +274,7 @@ while true; do
   esac
 
   AUDIO_DRIVER="$AUDIO_DRIVER_DEFAULT"
-  log "launch at $(up)s since boot: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} joy=${X16_JOYSTICKS} args='${VIDEO_ARGS}${JOY_ARGS}'"
+  noisy && log "launch at $(up)s since boot: display=${X16_DISPLAY} scale=${X16_SCALE} out=${X16_OUTPUT} joy=${X16_JOYSTICKS} args='${VIDEO_ARGS}${JOY_ARGS}'"
 
   START=$(cut -d. -f1 /proc/uptime)
   SDL_AUDIODRIVER="$AUDIO_DRIVER" "${INSTALL_DIR}/x16emu" \
@@ -261,15 +286,33 @@ while true; do
   rc=$?
   END=$(cut -d. -f1 /proc/uptime)
   ran=$((END - START))
-  log "x16emu exited rc=${rc} after ${ran}s (audio=${AUDIO_DRIVER})"
+  noisy && log "x16emu exited rc=${rc} after ${ran}s (audio=${AUDIO_DRIVER})"
 
-  # Guard against a busy crash-loop; retry ALSA->dummy once on instant audio death.
   if [ "$ran" -lt 3 ]; then
+    FAILS=$((FAILS + 1))
+    # One-shot audio fallback: an instant exit under ALSA is usually a dead audio
+    # device rather than a dead display, and dummy costs nothing to try. Does not
+    # count as a backoff step — retry it straight away.
     if [ "$AUDIO_DRIVER_DEFAULT" = alsa ]; then
       AUDIO_DRIVER_DEFAULT=dummy
       log "fast exit; falling back to SDL_AUDIODRIVER=dummy (no sound)"
       continue
     fi
-    sleep 3
+    # Say once, in plain terms, what is almost certainly wrong — this log is the
+    # only diagnostic an owner with no shell can be talked through over the phone.
+    if [ "$FAILS" -eq 4 ]; then
+      log "x16emu keeps exiting immediately (rc=${rc}). Backing off to at most 30s between tries and quietening this log. Most likely the display is switched off or on another input; it will start on its own once a display appears."
+    fi
+    # 3, 6, 12, 24, then 30 forever.
+    BACKOFF=$((BACKOFF * 2))
+    [ "$BACKOFF" -lt 3 ] && BACKOFF=3
+    [ "$BACKOFF" -gt 30 ] && BACKOFF=30
+    sleep "$BACKOFF"
+  else
+    # It ran properly, so whatever was wrong is over: forget the streak and go
+    # straight back to an instant relaunch (that is how `pkill -x x16emu` from
+    # the SSH tool applies a settings change without a visible delay).
+    FAILS=0
+    BACKOFF=0
   fi
 done

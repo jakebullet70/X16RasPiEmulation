@@ -1,6 +1,6 @@
 # Commander X16 on Raspberry Pi
 
-Turn a Raspberry Pi 3 or 4 into a **Commander X16 appliance**: power on, and the
+Turn a Raspberry Pi 4 into a **Commander X16 appliance**: power on, and the
 machine goes straight to the X16's `READY.` prompt fullscreen on your TV — no
 desktop, no login, no shell. Pull the plug when you're done.
 
@@ -20,7 +20,7 @@ runbooks written against real hardware.
 
 | Piece | Version / choice |
 | --- | --- |
-| Hardware | Raspberry Pi 3 or Pi 4, HDMI display, USB keyboard |
+| Hardware | Raspberry Pi 4, HDMI display, USB keyboard |
 | OS | DietPi arm64, Debian Bookworm (`DietPi_RPi234-ARMv8-Bookworm.img.xz`) |
 | Emulator | [x16-emulator](https://github.com/X16Community/x16-emulator) **r49** |
 | ROM | [x16-rom](https://github.com/X16Community/x16-rom) **r49** (version-locked to the emulator) |
@@ -138,6 +138,7 @@ which runs the rest inside WSL Ubuntu.
 | [dietpi.txt.snippet](config/dietpi.txt.snippet) | DietPi first-boot automation keys |
 | [config.txt.snippet](config/config.txt.snippet) | Full-KMS + forced 60 Hz HDMI firmware config |
 | [cmdline.txt.snippet](config/cmdline.txt.snippet) | Quiet-boot kernel params + the forced-EDID token |
+| [98-x16-console.conf](config/98-x16-console.conf) | Keeps kernel messages off the X16's screen. Numbered 98 so it beats DietPi's `97-dietpi.conf`, which sets the console log level to 4 and overrides the kernel command line — at 4, a late `KERN_ERR` makes fbcon repaint the console over the running emulator |
 | [x16.conf](config/x16.conf) | Appliance display/audio settings — lives on the FAT boot partition, so it's editable from any PC |
 | [x16-splash.service](config/x16-splash.service) | Systemd unit that paints the splash early in boot |
 | [getty-tty1-x16.conf](config/getty-tty1-x16.conf) | tty1 getty override for the appliance |

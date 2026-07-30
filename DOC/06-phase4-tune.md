@@ -1,6 +1,7 @@
 # Phase 4 — Tune (make it feel like a product)
 
-_Written: 2026-07-22 · Target: Raspberry Pi 3 / 4 · Base: DietPi arm64 (Bookworm)_
+_Written: 2026-07-22 · Target: **Raspberry Pi 4** (narrowed from Pi 3 / 4 on
+2026-07-30) · Base: DietPi arm64 (Bookworm)_
 
 Phase 3 gave you a Pi that powers on straight into the X16 and relaunches on exit.
 Phase 4 is polish: lock the display to a clean 60 Hz, make the boot silent so the

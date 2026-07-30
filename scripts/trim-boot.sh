@@ -32,11 +32,17 @@ done
 if [ "${1:-}" = --revert ]; then
   rm -f "$OVERRIDE"
   rm -f /etc/systemd/system/getty@tty1.service.d/10-no-idle-delay.conf
+  # rmdir below only succeeds once every drop-in is gone, so remove these first.
+  rm -f /etc/systemd/system/getty@tty1.service.d/20-keep-vt.conf
   rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
+  rm -f /etc/sysctl.d/98-x16-console.conf
+  systemctl restart systemd-sysctl 2>/dev/null || true
   systemctl enable serial-getty@ttyS0.service 2>/dev/null || true
   systemctl daemon-reload
   echo "Reverted. (A console=ttyS0 token removed from cmdline.txt is NOT restored;"
   echo "the backup is alongside it as cmdline.txt.bak-serialconsole.)"
+  echo "NOTE: removing 98-x16-console.conf puts the console log level back to"
+  echo "DietPi's 4, so kernel errors can again repaint over the emulator."
   exit 0
 fi
 
@@ -98,6 +104,45 @@ cat > "${IDLE_DIR}/10-no-idle-delay.conf" <<'CONF'
 Type=simple
 CONF
 echo "installed: ${IDLE_DIR}/10-no-idle-delay.conf"
+
+# ---- 4. stop the getty wiping the splash it was handed ----------------------
+# getty@.service ships TTYVTDisallocate=yes, and its own comment says "the VT is
+# cleared by TTYVTDisallocate". Measured on the dev Pi 2026-07-30:
+#   x16-splash.service finished painting  4.941s
+#   getty@tty1 started                    5.280s   <- deallocates VT1, paint gone
+# so the splash that was already on screen is thrown away 0.34s later and
+# custom.sh has to draw it a third time. Dosbian V1.0 and Combian V3.0 both set
+# this to no, in a drop-in they call noclear.conf -- that is how their splash
+# survives from first paint through to the emulator.
+# Costs nothing measurable: launch at 6.53s with it, 6.56s without.
+cat > "${IDLE_DIR}/20-keep-vt.conf" <<'CONF'
+# X16 appliance: do NOT deallocate VT1 when getty@tty1 starts. Deallocating
+# clears the VT, which discards the splash x16-splash.service has just painted.
+# See scripts/trim-boot.sh.
+[Service]
+TTYVTDisallocate=no
+CONF
+echo "installed: ${IDLE_DIR}/20-keep-vt.conf"
+
+# ---- 5. keep kernel messages off the X16's screen --------------------------
+# DietPi's /etc/sysctl.d/97-dietpi.conf sets "kernel.printk = 4 4 1 7", which
+# beats the kernel command line -- cmdline carried "quiet loglevel=1" and
+# /proc/sys/kernel/printk still read 4. At console level 4 any KERN_ERR is
+# written to the foreground VT, and printing to a VT makes fbcon repaint the
+# console OVER whatever x16emu is showing. Observed: a Wi-Fi regulatory error
+# fired 2.5s after the emulator was already up and wiped it off the screen.
+# 98 sorts after 97, so ours is the last word. See config/98-x16-console.conf
+# for the full reasoning -- including why console=tty3 does NOT fix this.
+SYSCTL_SRC="$(dirname "$0")/../config/98-x16-console.conf"
+if [ -f "$SYSCTL_SRC" ]; then
+  install -m 644 "$SYSCTL_SRC" /etc/sysctl.d/98-x16-console.conf
+  echo "installed: /etc/sysctl.d/98-x16-console.conf"
+else
+  printf 'kernel.printk = 1 4 1 7\n' > /etc/sysctl.d/98-x16-console.conf
+  echo "installed: /etc/sysctl.d/98-x16-console.conf (minimal; repo copy not found)"
+fi
+systemctl restart systemd-sysctl 2>/dev/null || true
+echo "  console loglevel now: $(cut -f1 /proc/sys/kernel/printk)  (want 1)"
 
 systemctl daemon-reload
 echo

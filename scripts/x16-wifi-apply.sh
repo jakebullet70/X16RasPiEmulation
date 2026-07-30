@@ -151,7 +151,7 @@ scrub_conf() {
 
 [ -f "$CONF" ] || { log "no ${CONF}; nothing to do"; exit 0; }
 
-X16_WIFI_SSID=""; X16_WIFI_PSK=""; X16_WIFI_COUNTRY="US"; X16_WIFI_HIDDEN=0
+X16_WIFI_SSID=""; X16_WIFI_PSK=""; X16_WIFI_COUNTRY="GB"; X16_WIFI_HIDDEN=0
 # Source a CR-STRIPPED COPY, never the card's file directly.
 #
 # This file exists to be edited on a Windows PC, and an editor that saves CRLF

@@ -13,7 +13,16 @@
 # Tokens to append (all on the one existing line, space-separated):
 #
 #   quiet                        # suppress most kernel boot messages
-#   loglevel=0                   # kernel: emergency-only console log level
+#   loglevel=1                   # kernel: near-emergency-only console log level
+#         ^ DOES NOT ACTUALLY TAKE EFFECT ON DietPi, and this is worth knowing
+#           before you trust it: /etc/sysctl.d/97-dietpi.conf sets
+#           "kernel.printk = 4 4 1 7", systemd-sysctl applies it after boot, and
+#           it beats whatever the command line asked for. Measured on the dev Pi
+#           2026-07-30: cmdline said "quiet loglevel=1", /proc/sys/kernel/printk
+#           read 4. The token is kept because it is right for the early-boot
+#           window before systemd-sysctl runs, but the setting that MATTERS is
+#           config/98-x16-console.conf (98 sorts after 97). Do not delete that
+#           file on the strength of this token.
 #   logo.nologo                  # hide the Raspberry Pi logo(s) at top of screen
 #   vt.global_cursor_default=0   # no blinking text cursor on the console
 #   consoleblank=0               # never DPMS-blank the console (appliance stays lit)
@@ -53,7 +62,26 @@
 # Example — an existing line like:
 #   console=serial0,115200 console=tty1 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait
 # becomes:
-#   console=serial0,115200 console=tty1 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait quiet loglevel=0 logo.nologo vt.global_cursor_default=0 consoleblank=0 plymouth.enable=0
+#   console=serial0,115200 console=tty3 root=PARTUUID=xxxx rootfstype=ext4 fsck.repair=yes rootwait quiet loglevel=1 logo.nologo vt.global_cursor_default=0 consoleblank=0 plymouth.enable=0
 #
-# NOTE: keep `console=tty1` — the appliance needs a console tty for KMSDRM to
-# become DRM master. Do not remove it while chasing "quiet".
+# NOTE: keep a `console=ttyN` token — the appliance needs a console tty for
+# KMSDRM to become DRM master. Do not remove it while chasing "quiet".
+#
+# --- console=tty3 : what it does and, importantly, what it does NOT do --------
+# The shipped image uses console=tty3 rather than console=tty1 (changed
+# 2026-07-30, and Dosbian V1.0 / Combian V3.0 both do the same).
+#
+# WHAT IT DOES: /dev/console is bound to the LAST console= token, so userspace
+# that writes to /dev/console lands on VT3 — a VT nobody ever looks at — instead
+# of on top of the X16. Confirmed: /sys/class/tty/console/active reads tty3.
+#
+# WHAT IT DOES NOT DO — do not expect it to, this cost a wrong diagnosis:
+# it does NOT move KERNEL messages off the visible screen. The kernel's VT
+# console writes printk to fg_console, the FOREGROUND VT, whatever ttyN you name.
+# Verified by reading the VT text buffers directly: with console=tty3 active and
+# "printk: legacy console [tty3] enabled" in dmesg, an injected KERN_ERR still
+# appeared in /dev/vcs1 (VT1) and /dev/vcs3 was empty.
+# Kernel messages are kept off screen by config/98-x16-console.conf instead.
+#
+# The diagnostic value claimed for console=tty3 elsewhere — "switch to VT3 and
+# read the boot log" — therefore does not hold for kernel output either.

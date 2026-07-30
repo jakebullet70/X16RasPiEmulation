@@ -9,9 +9,16 @@ X16 emulator (`x16emu`) fullscreen — no desktop, kiosk feel.
 
 - **Base OS:** DietPi (Debian-based, lightweight, built-in autostart/kiosk
   automation). arm64 build.
-- **Target hardware:** Raspberry Pi 3 and Pi 4 from a **single arm64 image**.
-  Both boot 64-bit DietPi and both use the same `vc4-kms-v3d` full-KMS display
-  path — no per-model fork. Pi 3 is the performance floor.
+- **Target hardware:** Raspberry Pi 4 only, arm64.
+  _Narrowed from "Pi 3 and Pi 4 from a single arm64 image" on 2026-07-30._ The
+  image is still built on the shared `vc4-kms-v3d` full-KMS path and nothing in it
+  is Pi-4-specific, so a Pi 3 would very likely boot it — but **the Pi 3 leg was
+  never run on hardware**, so it is not a claim we make. Everything below that
+  reads as two-model support is history, not a requirement.
+  Concretely untested on a Pi 3, and the reason the claim is withdrawn: whether
+  `ttyS0` is a real console there rather than the not-ready mini-UART it is on a
+  Pi 4, the different Wi-Fi chip, HDMI mode/audio at 720p, and the DPI/VGA-HAT
+  display path.
 - **Display path:** no X server. `x16emu` → SDL2 **KMSDRM** backend → HDMI.
 - **User programs:** loaded via `x16emu -fsroot` pointed at a folder on the FAT
   `/boot` partition (drop `.prg`/`.bas` files from any PC).

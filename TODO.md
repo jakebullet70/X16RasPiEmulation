@@ -29,7 +29,8 @@ Running list of what's outstanding. Status of what's *done* lives in
       something else can be invalidated by a tool that never touched the file
       containing it.
 
-- [ ] **Superseded — was: build the image with a 256 MB FAT partition.**
+- [x] **Superseded and closed — FAT ships at DietPi's stock 128 MB.** Was: build
+      the image with a 256 MB FAT partition.
       Layout decided and verified on hardware 2026-07-25 — see DOC/07 Part A2.
       FAT is fixed at build time (PiShrink expands root, never FAT), so it must
       fit a 4 GB card. **Revised 512 MB → 256 MB (2026-07-29):** a built image has
@@ -57,10 +58,15 @@ Running list of what's outstanding. Status of what's *done* lives in
       The stamp itself is now **gone from the design**: the applier clears the
       card on a successful join instead (2026-07-29), so a stale stamp can no
       longer exist to be shipped. `.x16-wifi.state` is deleted on sight.
-      One thing still to decide before capture:
-      - **The dev Pi's dropbear host keys are baked in.** `--reset-host-keys`
-        regenerates them; dropbear here runs without `-R`, so simply deleting
-        them would ship an image with no SSH at all.
+      **Host keys: DECIDED — ship them as they are (2026-07-30).** The dev Pi's
+      dropbear host keys are baked in, so every unit flashed from this image
+      shares one SSH identity. Accepted knowingly: SSH here is a service-tool path
+      on an appliance with no shell, not an exposed surface, and the only safe
+      alternative is `--reset-host-keys` — dropbear runs without `-R`, so simply
+      deleting the keys ships an image with no SSH at all.
+      `check-image.sh` still WARNs, which is right: that warning is now the record
+      of the decision, not an outstanding task. Revisit only if a unit is ever put
+      on an untrusted network.
 
       **Country code SETTLED: `US` everywhere (2026-07-30.)** It had shipped
       split — card and ext4 template `US`, both `dietpi.txt` copies `GB`, README
@@ -119,9 +125,26 @@ that's actually ready.
       read-only overlay either: it would silently discard SAVEs into the ext4
       library *and* the Wi-Fi credentials the applier now stores there (DOC/07
       Part A2). `check-image.sh` fails an image whose `/var/log` is not a tmpfs.
-- [ ] Still to do: pull power mid-session several times and confirm it boots clean.
-- [ ] **The serial console is off, but DietPi still thinks it should be on.**
-      Checked on the dev Pi 2026-07-29:
+- [x] **Power-cut resilience — accepted as verified by the owner, 2026-07-30.**
+      Pulling power mid-session "many times, it's fine". Not instrumented and not
+      re-run here, so this is an owner judgement rather than a captured result —
+      recorded as such deliberately, because the DietPi-RAMlog design above is
+      what it is testing and that part *is* verified in the image.
+- [x] **The serial console disagreement — SETTLED 2026-07-30, both copies now
+      `=0`.** Unblocked by narrowing to the Pi 4: it had been left open *only*
+      because on a Pi 3 `ttyS0` can be a genuine console rather than the not-ready
+      mini-UART it is on a Pi 4, which made blanket-disabling risky. No Pi 3, no
+      risk, and nothing here uses a serial console.
+      Set on the dev Pi in **both** `dietpi.txt` files (Bookworm has one on ext4 and
+      one on the card — separate files, both said `1`).
+      `prep-image-source.sh` now enforces it on both, and `check-image.sh` was
+      upgraded from WARN to **FAIL** on both, because with prep enforcing it a
+      disagreement now means prep did not run rather than that somebody chose
+      differently. That removes one of the two standing warnings on the build.
+      `enable_uart=1` stays in `config.txt` — it pairs with `dtoverlay=disable-bt`
+      and does not create a getty by itself. Verified, not assumed.
+
+      Original finding, for the record — checked on the dev Pi 2026-07-29:
 
       | | |
       |---|---|
@@ -208,7 +231,10 @@ that's actually ready.
       fake-hwclock restores the build-time clock and NTP then corrects it
       mid-boot. Only the uptime-relative figures in `x16-appliance.log` mean
       anything; wall-clock deltas in `systemctl status` are noise.
-- [ ] **Pi 3 leg** — the same card into the Pi 3 for Gate 5's second-Pi
+- [x] **Pi 3 leg — DROPPED 2026-07-30, the release is Pi 4 only.** Never run on
+      hardware, so two-model support is not a claim this project makes. Original
+      scope kept below for the record.
+      ~~Pi 3 leg~~ — the same card into the Pi 3 for Gate 5's second-Pi
       requirement, plus non-HDMI display detection and the Pi 3's different Wi-Fi
       chip. Note the image ships `X16_OUTPUT=1080p` / `hdmi_mode=16`; if the TV
       needs it, `X16_OUTPUT=720p` in `x16.conf` is a card edit, not a re-image —
@@ -337,8 +363,9 @@ that's actually ready.
       on a dirty volume), idempotent on re-run, and over-long / illegal labels
       rejected rather than silently truncated.
 
-- [ ] **The appliance loop spins with no backoff when no display is attached —
-      found 2026-07-30 by accident.** The dev Pi was powered up with the TV off,
+- [x] **The appliance loop spun with no backoff when no display is attached —
+      found 2026-07-30 by accident, fixed the same day.** The dev Pi was powered
+      up with the TV off,
       and `custom.sh` had relaunched `x16emu` **626 times in 32 minutes**, one
       every ~3 s, for as long as it was left alone. Both connectors read
       `disconnected`, so `find_display` burns its full timeout (display ready at
@@ -350,13 +377,75 @@ that's actually ready.
       tmpfs, so the log spam never touches the card — but two things are wrong:
       it holds a core busy indefinitely, and at ~150 bytes a launch it will fill
       a 50 MB tmpfs in roughly a fortnight on a unit left switched on.
-      Wanted: exponential backoff capped at something like 15–30 s, and collapse
-      the repeated identical log lines into a count. Deliberately NOT a give-up —
-      the emulator must appear when the TV is finally switched on.
+      **FIXED 2026-07-30** in [`scripts/custom.sh`](scripts/custom.sh): backoff of
+      3 → 6 → 12 → 24 → 30 s and then 30 s forever, reset to instant the moment
+      the emulator runs properly (so `pkill -x x16emu` from the SSH tool still
+      applies a settings change with no visible delay). `noisy()` logs the first
+      three attempts and then every twentieth, and a single plain-language line
+      fires at attempt four saying the display is probably off — that log is the
+      only diagnostic an owner with no shell can be talked through by phone.
+      Deliberately never gives up.
+      Verified under `dash` (the appliance runs `/bin/dash`, not bash) and then on
+      the hardware in the genuine disconnected state: **66 attempts per 32 minutes
+      instead of 626**, and 4 log lines per 150 s instead of ~50.
+      One thing deliberately left unbounded: x16emu's own stderr is redirected into
+      the log every attempt, so one `SDL_Init failed` line per retry still
+      accumulates — ~115 KB/day at the 30 s cap, i.e. over a year against the
+      50 MB tmpfs rather than a fortnight. Kept readable on purpose: if the failure
+      reason ever changes, that line is the only evidence of it.
       Note this also means **`launch at N s` is not a valid boot metric unless a
-      display is actually connected**, which is worth knowing before the Pi 3 leg:
-      measure `systemd-analyze` and `read_wait` for card/boot work, and only trust
+      display is actually connected**: measure `systemd-analyze` and `read_wait`
+      for card/boot work, and only trust
       `launch at` with the TV on.
+
+- [x] **`/root` shipped the developer's working files — fixed in prep
+      2026-07-30.** 2.2 MB of them on the dev Pi: `sdbench-*.txt` and `sdbench.sh`
+      from the SD test, `oc100.log`, `config.txt.orig-presdtest`,
+      `custom.sh.prev-backoff`, an orphaned `x16-wifi-apply.bak-20260729`,
+      `x16-pull.tgz` / `x16scripts.tgz` staging archives, `install.log`, and the
+      `x16-pull` / `x16-deploy` staging dirs. `prep-image-source.sh` only ever
+      cleaned `/root/.bash_history` and the mesa shader cache, so all of it would
+      have gone into the image.
+      Deliberately a **named list**, not "empty `/root`": the dotfiles there are
+      real (`.bashrc`, `.profile`, `.hushlogin`, `.ssh`) and wiping them would
+      change how a shipped unit behaves. Anything unrecognised is **reported** for
+      a human to judge rather than deleted — and that survey skips the patterns the
+      cleanup handles, because otherwise a dry run flags all sixteen already-handled
+      files as unknown, which is worse than no survey. Verified against the real
+      mess: it now reports only `cleanup.sh`.
+
+- [x] **`/root/.ssh/authorized_keys` ships 2 keys — DECIDED 2026-07-30: leave it.**
+      Checked how the two mature comparison distros handle the same question:
+      **neither Dosbian V1.0 nor Combian V3.0 ships an `authorized_keys` at all**,
+      in `/root` or any home — they avoid the problem rather than manage it. Their
+      *host* keys, though, are baked in exactly like ours (4 pairs, mtime one
+      minute after `/etc/rpi-issue`, so pi-gen build-time and shared by every unit
+      ever flashed), which makes our accepted risk there the normal position for
+      this class of image rather than a corner cut.
+      Also found, and worth remembering as a general lesson:
+      `regenerate_ssh_host_keys.service` is present on both images with **no enable
+      symlink anywhere**, and the unit ends in
+      `ExecStartPost=/bin/systemctl disable regenerate_ssh_host_keys` — it ran once,
+      disarmed itself, and got captured dead. That is the identical failure mode as
+      DietPi's `dietpi-fs_partition_resize.service` which cost us a flash-and-fail
+      cycle. **A self-disabling first-boot unit always ships disabled unless
+      something re-arms it before capture** — two independent distros prove it.
+      The nicer pattern, recorded but deliberately NOT adopted: Dosbian ships SSH
+      *off*, with `sshswitch.service` gated on `ConditionPathExistsGlob=/boot/ssh{,.txt}`,
+      so nothing listens until the owner drops a file on the FAT partition. Both
+      distros also lock root, where we allow root over dropbear.
+      Not doing it: dropbear here runs without `-R` so it needs host keys already
+      present, which makes the ordering fiddly for no benefit on units that stay in
+      the owner's hands.
+      image can SSH into **every unit flashed from it**. Left in place on purpose,
+      because deleting it is how you lock yourself out of your own machines — and
+      SSH is how every fix in this project has been delivered.
+      Note this is a *bigger* question than the shared dropbear host keys, which
+      are already accepted: host keys let a unit be **impersonated**, this lets a
+      unit be **entered**. `prep-image-source.sh` now prints the key count and says
+      it left them alone, so the choice is made in the open at capture time rather
+      than by default. Also still true: DietPi's root password is whatever it is on
+      the build Pi.
 
 ## Phase 4 leftovers (subjective — need eyes on the TV)
 
@@ -424,9 +513,7 @@ effect; the rest are correctness/robustness wins that may cost nothing.
       since we ship ONE image for both, enabling it means overclocking the Pi 3's
       card on every unit. Test it deliberately during the Pi 3 leg, from a clean
       Pi 3 baseline, with [`scripts/x16-sdbench.sh`](scripts/x16-sdbench.sh).
-      Note the independent third distro, BeePi 3.1 — a *Pi 3* image — does **not**
-      ship it. So the "two mature distros" evidence is one base that does and one
-      independent build that declines.
+      **Moot for a Pi-4-only release** — nothing to do.
 
 - [ ] **1a. The card IS the bottleneck — so buy a better card, don't overclock a
       bad one.** This is what the measurement actually found, and it is the
@@ -448,26 +535,71 @@ effect; the rest are correctness/robustness wins that may cost nothing.
       to ±1 %, but across boots it moves ~5 %.** So compare across-boot numbers
       only against across-boot noise, and never call a 5 % change a result.
 
-- [ ] **2. `console=tty3` instead of `quiet loglevel=0`.** Both images send the
-      kernel/systemd console to an unused VT and keep `loglevel=1`, rather than
-      silencing it. Two wins: a late kernel message can never land on top of the
-      splash, and **the boot log stays readable by switching VT**.
-      That second one is not theoretical for us — when the shrunk image would not
-      boot, the `rootwait` failure was invisible *precisely because* `quiet
-      loglevel=0` swallowed it, and our documented workaround is still "drop
-      `quiet` and re-flash". With `console=tty3` the message would have been
-      sitting on VT3 the whole time.
-      Check before adopting: that nothing we do assumes `console=tty1`, and that
-      the emulator's KMS modeset still lands on VT1.
+- [x] **2. `console=tty3` — ADOPTED 2026-07-30, but the reason above was WRONG and
+      it is not what fixes anything.** Adopted because it does move `/dev/console`
+      off the visible VT (`/sys/class/tty/console/active` reads `tty3`), so
+      userspace writers land on a VT nobody looks at. Costs nothing: launch at
+      6.65 s against a 6.56 s baseline.
+      **The claim it would keep KERNEL messages off the screen is false.** The
+      kernel's VT console writes printk to `fg_console` — the *foreground* VT —
+      whatever `ttyN` you name in `console=`. Proved by reading the VT text buffers
+      directly: with `console=tty3` live and `printk: legacy console [tty3] enabled`
+      in dmesg, an injected `KERN_ERR` appeared in **`/dev/vcs1`** and `/dev/vcs3`
+      was **empty**. The "switch to VT3 and read the boot log" diagnostic benefit
+      does not hold either, for the same reason.
+      Reading `/dev/vcsN` is the technique to remember here — it shows exactly what
+      is on a VT, so this class of question never needs someone at the TV again.
 
-- [ ] **3. `TTYVTDisallocate=no` on `getty@tty1`.** This is what stops their getty
-      deallocating VT1 and wiping the splash. We repaint from `custom.sh` a third
-      time right before launch — check whether that repaint exists only to undo
-      VT deallocation. If so this replaces it, and we lose a moving part.
+- [x] **2a. What ACTUALLY keeps kernel messages off the X16 — a third DietPi
+      double-switch (2026-07-30).** `/etc/sysctl.d/97-dietpi.conf` sets
+      `kernel.printk = 4 4 1 7`, systemd-sysctl applies it after boot, and it beats
+      the kernel command line: cmdline said `quiet loglevel=1` and
+      `/proc/sys/kernel/printk` still read **4**. At console level 4 any `KERN_ERR`
+      is printed to the foreground VT, and printing to a VT makes fbcon repaint the
+      console **over** whatever x16emu is showing.
+      That is a real, owner-visible defect, not a theoretical one. The trigger
+      found in the wild: `brcmf_cfg80211_reg_notifier: Firmware rejected country
+      setting`, fired at **9.06 s — 2.5 s after the emulator was already running** —
+      whenever Wi-Fi associates with an AP whose beacon advertises a different
+      regulatory domain than the configured one. Ordinary network, no fault, and no
+      country setting of ours prevents it: the AP wins and the firmware refuses the
+      change the AP asks for. `GB` was tried and does not silence it.
+      Fixed by [`config/98-x16-console.conf`](config/98-x16-console.conf) —
+      `kernel.printk = 1 4 1 7`, numbered **98 so it sorts after DietPi's 97**.
+      Renumbering it below 97 silently disables it. `KERN_EMERG` still prints,
+      which is correct — a panic *should* be allowed over the emulator — and the
+      ring buffer and journal are untouched, so `dmesg` still shows everything.
+      Verified across a full reboot: console loglevel 1 from boot, the message
+      still fires at 9.54 s and is still in `dmesg`, and **`/dev/vcs1` is empty**.
+      Installed by `trim-boot.sh` (and removed by its `--revert`); `check-image.sh`
+      **fails** an image without it, and notes any lower-numbered file that also
+      sets `kernel.printk`.
+      **Third instance of the same pattern** — after `dtoverlay=disable-wifi` +
+      module blacklist, and the serial console unit + `dietpi.txt` — so it is now a
+      rule, not a coincidence: *when DietPi appears to ignore a setting, look for
+      DietPi's own copy of it somewhere else.*
 
-- [ ] **4. Do we ship an initramfs?** Neither image has one at all. DietPi
-      Bookworm may; `ls /boot/firmware/initramfs*` on the running Pi settles it in
-      one command. If present, dropping it is real time on every boot.
+- [x] **3. `TTYVTDisallocate=no` — ADOPTED 2026-07-30, and the suspicion was
+      right.** `getty@.service` ships `TTYVTDisallocate=yes` and its own comment
+      says "the VT is cleared by TTYVTDisallocate". Timestamps on the dev Pi:
+      `x16-splash.service` finished painting at **4.941 s**, `getty@tty1` started at
+      **5.280 s** — so the splash already on screen was thrown away 0.34 s later,
+      which is why `custom.sh` paints a third time. Both comparison images set this
+      to `no` in a drop-in they call `noclear.conf`.
+      Installed by `trim-boot.sh` as `20-keep-vt.conf`. Costs nothing measurable:
+      launch at 6.53 s with it, 6.56 s without.
+      It does **not** remove the `custom.sh` paint, though, so we did not lose a
+      moving part: that paint also provides the `X16_SPLASH_SECONDS` hold, which is
+      what makes the splash visible at all before the emulator's modeset covers it.
+
+- [x] **4. Initramfs — we do not ship one. Nothing to do.** No `initramfs*` or
+      `initrd*` on the boot partition, no `initramfs` directive in `config.txt`, no
+      `initrd` token in `cmdline.txt`, and `systemd-analyze` reports only
+      `(kernel) + (userspace)` with **no initrd phase**. Same as both comparison
+      images. `initramfs-tools` is installed as a package but nothing generates or
+      loads an image, and on a Pi the firmware only loads one if `config.txt` names
+      it. Useful negative result: the ~1.7 s kernel time is genuinely kernel, so
+      there is no hidden initrd time to reclaim.
 
 **Explicitly rejected — do not re-litigate:**
 
@@ -550,11 +682,17 @@ Remaining, optional:
       for a unit that died 260 ms later, so the `ifup` fallback never ran.
       Result: associates unaided at boot, DHCP lease, routes to the internet,
       and the emulator still launches at 6.6 s.
-- [ ] Still untested on a **Pi 3** — different Wi-Fi chip (BCM43438 / BCM43455
+- [x] Moot — Pi 4 only. ~~Still untested on a **Pi 3**~~ — different Wi-Fi chip (BCM43438 / BCM43455
       vs the Pi 4's) and slower firmware load, so the "interface appeared after
       Ns" path may behave differently.
 
-## Pi 3 test — prep DONE 2026-07-25, hardware run outstanding
+## Pi 3 test — MOOT (release narrowed to Pi 4 only, 2026-07-30)
+
+Nothing in this section is outstanding. The prep work described here was done and
+is harmless to keep — the 720p / 640x480 splash blobs and the non-HDMI display
+detection also cover a Pi 4 on an awkward TV or a DPI hat, so none of it was
+removed. The hardware run never happened, which is exactly why the Pi 3 is **not**
+a supported target.
 
 Two things that would have failed silently on the bench are fixed already:
 
