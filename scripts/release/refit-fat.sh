@@ -48,7 +48,9 @@ FAT_MB=256
 # At 256 MB this gives ~131k clusters and a 512 KB FAT — comfortably normal.
 # Keep it >= 65,525 clusters or the volume stops being valid FAT32.
 CLUSTER_SECTORS=4
-LABEL=""
+# The shipped volume label. mkfs.vfat here creates a fresh FAT, so without this
+# a refit would strip a label that set-fat-label.sh had already applied.
+LABEL="X16PI"
 OUT=""
 IMG=""
 

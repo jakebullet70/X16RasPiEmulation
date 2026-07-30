@@ -57,17 +57,31 @@ Running list of what's outstanding. Status of what's *done* lives in
       The stamp itself is now **gone from the design**: the applier clears the
       card on a successful join instead (2026-07-29), so a stale stamp can no
       longer exist to be shipped. `.x16-wifi.state` is deleted on sight.
-      Two things still to decide before capture:
-      - **The country code ships as the owner's default.** Confirmed on the
-        flashed card 2026-07-29, and it *did* ship split: `x16-wifi.conf` and the
-        ext4 template both say `US`, `dietpi.txt` says
-        `AUTO_SETUP_NET_WIFI_COUNTRY_CODE=GB`, and the README's example shows
-        `GB`. The applier reads the card, so the effective default is **US** and
-        the other two are cosmetic — but pick one on purpose and make all four
-        agree. A missing or wrong code looks exactly like a wrong password.
+      One thing still to decide before capture:
       - **The dev Pi's dropbear host keys are baked in.** `--reset-host-keys`
         regenerates them; dropbear here runs without `-R`, so simply deleting
         them would ship an image with no SSH at all.
+
+      **Country code SETTLED: `US` everywhere (2026-07-30.)** It had shipped
+      split — card and ext4 template `US`, both `dietpi.txt` copies `GB`, README
+      example `GB` — and "cosmetic" was the wrong reading of the `dietpi.txt`
+      half: `dietpi-config` and DietPi updates act on
+      `AUTO_SETUP_NET_WIFI_COUNTRY_CODE` via `dietpi-set_hardware`, so the
+      regulatory domain could change under a unit already in an owner's hands,
+      with a symptom indistinguishable from a wrong passphrase. Note there are
+      **two** `dietpi.txt` files on Bookworm, not one — `/boot/dietpi.txt` on the
+      ext4 root and `/boot/firmware/dietpi.txt` on the card, separate files with
+      identical content, and both said `GB`.
+      Now `US` in: `config/x16-wifi.conf`, the applier's fallback default
+      (`scripts/x16-wifi-apply.sh`), `scripts/x16-wifi.sh`'s `wpa_supplicant`
+      header, and the end-user README. `prep-image-source.sh` rewrites the card,
+      the ext4 reset template and both `dietpi.txt` copies to agree;
+      `check-image.sh` **fails** an image where the template or either
+      `dietpi.txt` disagrees with the card, and warns if the card ships anything
+      other than `US`. Applied to the dev Pi 2026-07-30 and all four verified.
+      The template mattered separately: the applier rebuilds the card from it
+      after a successful join, so a stale country there reappears *later* rather
+      than at capture.
       **Consume-and-clear is now verified on hardware (2026-07-29).** A real Pi 4
       read credentials off the card, enabled the radio, rebooted itself once,
       joined the AP at 192.168.1.194, cleared its own `x16-wifi.conf` keeping
@@ -298,9 +312,51 @@ that's actually ready.
       first thing an owner sees. `check-image.sh` prints both. The `bootfs` label
       claim was **wrong** and is corrected: try6's FAT has no volume label at all,
       so Windows shows a bare drive letter.
-- [ ] Decide whether to give the FAT partition a volume label (`X16`?) at build
-      time. A named drive is a much better first impression than "Removable Disk
-      (E:)", and it costs one `fatlabel` call.
+- [x] **FAT volume label SETTLED: `X16PI`, and it needed a new script
+      (2026-07-30).** A named drive is a much better first impression than
+      "Removable Disk (E:)", and `dist/README-end-user.md` now names it, so it is
+      no longer cosmetic — the README would be telling the owner to look for a
+      drive that doesn't exist.
+      The catch: the only thing that ever set a label was `refit-fat.sh --label`,
+      via `mkfs.vfat -n` — and the refit is **off by default** now that FAT stays
+      at DietPi's stock 128 MB. So the label had no path to the shipped image at
+      all. Fixed by [`scripts/release/set-fat-label.sh`](scripts/release/set-fat-label.sh),
+      offline on the capture, wired into `make-release.ps1` (`-FatLabel`,
+      defaulting to `X16PI`) after any refit; `refit-fat.sh`'s own default is
+      `X16PI` too so a refit cannot strip it. `check-image.sh` **fails** an
+      unlabelled image.
+      Offline rather than on the Pi on purpose: `/boot/firmware` is mounted *and*
+      bind-mounted into the running emulator's fsroot, so relabelling live means
+      the kernel's cached boot sector can win on unmount and the change may not
+      stick. `prep-image-source.sh` only reports the label, and says where it is
+      actually applied.
+      Verified against a synthetic 128 MB-FAT + ext4 MBR image in WSL: label set,
+      **FAT volume serial unchanged** (`/etc/fstab` mounts `/boot/firmware` by it,
+      so a changed serial would boot with no boot partition), MBR disk id
+      unchanged, dirty bit from a live capture cleared first (`fatlabel` refuses
+      on a dirty volume), idempotent on re-run, and over-long / illegal labels
+      rejected rather than silently truncated.
+
+- [ ] **The appliance loop spins with no backoff when no display is attached —
+      found 2026-07-30 by accident.** The dev Pi was powered up with the TV off,
+      and `custom.sh` had relaunched `x16emu` **626 times in 32 minutes**, one
+      every ~3 s, for as long as it was left alone. Both connectors read
+      `disconnected`, so `find_display` burns its full timeout (display ready at
+      36.5 s instead of ~5 s), then `x16emu` exits `rc=255` with
+      `SDL_Init failed: kmsdrm not available`, and the loop immediately tries
+      again. Forever.
+      This is the owner-facing case of "TV is off, or on the wrong input", so it
+      is not an artificial condition. Nothing is corrupted — `/var/log` is a
+      tmpfs, so the log spam never touches the card — but two things are wrong:
+      it holds a core busy indefinitely, and at ~150 bytes a launch it will fill
+      a 50 MB tmpfs in roughly a fortnight on a unit left switched on.
+      Wanted: exponential backoff capped at something like 15–30 s, and collapse
+      the repeated identical log lines into a count. Deliberately NOT a give-up —
+      the emulator must appear when the TV is finally switched on.
+      Note this also means **`launch at N s` is not a valid boot metric unless a
+      display is actually connected**, which is worth knowing before the Pi 3 leg:
+      measure `systemd-analyze` and `read_wait` for card/boot work, and only trust
+      `launch at` with the TV on.
 
 ## Phase 4 leftovers (subjective — need eyes on the TV)
 
@@ -329,15 +385,68 @@ Caveat for the morning: this is all read from configuration. Nothing below has
 been booted or timed except where noted. Item 1 is the only one with a hardware
 effect; the rest are correctness/robustness wins that may cost nothing.
 
-- [ ] **1. `dtoverlay=sdtweak,overclock_50=100` — the one real lever, so measure
-      it first.** SD clock 50 → 100 MHz, roughly halving kernel + rootfs read
-      time. We have `boot_delay=0` already but nothing like this. It *is* an
-      overclock: marginal cards can corrupt, and the failure would be silent
-      filesystem damage rather than a clean refusal. Two mature distros shipping
-      it by default across all Pi models is real evidence, not proof.
-      Method: `systemd-analyze` + `x16-appliance.log`'s "launch at N s" before and
-      after, on the same card, cold boot each time. Revert if the gain is inside
-      the noise — this is not a change to take on faith.
+- [x] **1. SD clock overclock — TESTED 2026-07-30, and it CANNOT WORK ON A PI 4.
+      Reverted.** Two things were wrong with the plan, and the second one is the
+      real answer.
+
+      **The syntax is obsolete.** `dtoverlay=sdtweak,overclock_50=100` would have
+      done nothing quietly: this firmware's own `overlays/README` says
+      `Name: sdtweak / Info: This overlay is now deprecated. Use the sd_* dtparams
+      in the base DTB / Load: <Deprecated>`, and `sdtweak.dtbo` is not even
+      shipped on the image. The live form is `dtparam=sd_overclock=100`. (DietPi
+      already uses the modern spelling elsewhere — `dtparam=sd_poll_once`.)
+
+      **The knob does not reach the Pi 4's card.** Applied
+      `dtparam=sd_overclock=100`, rebooted, and the bus clock did not move:
+      `/sys/kernel/debug/mmc0/ios` read `50000000 Hz` before and after, and boot
+      was identical to the millisecond in userspace (1.699 s + 15.317 s baseline
+      vs 1.706 s + 15.317 s). The device tree says why — the firmware wrote the
+      property onto a **disabled** node:
+
+      | node | status | `brcm,overclock-50` |
+      | --- | --- | --- |
+      | `/soc/mmc@7e202000` | **disabled** | **100** ← where the dtparam landed |
+      | `/soc/mmcnr@7e300000` (mmc1 = SDIO/Wi-Fi) | okay | 0 |
+      | `/emmc2bus/mmc@7e340000` (mmc0 = **the SD card**) | okay | *no such property* |
+
+      On a Pi 4 the card is on the `brcm,bcm2711-emmc2` controller, whose node
+      exposes **no overclock property at all**. `sd_overclock` targets the old
+      bcm2835 controllers, which on this board are either disabled or driving the
+      Wi-Fi SDIO chip. Worth checking that it did *not* leak onto Wi-Fi — it
+      didn't, `mmcnr` stayed 0.
+      No corruption: zero `mmc0` CRC/timeout lines, zero `EXT4-fs error`, FS
+      clean. (A p1 sha256 did change between runs — that was our own `config.txt`
+      edit, since config.txt lives on p1. Not evidence of anything.)
+
+      **On a Pi 3 it probably DOES apply**, because there the card sits on one of
+      the bcm2835 controllers this dtparam actually targets. So this is a
+      **Pi-3-only** lever, not the "all Pi models" one the note assumed — and
+      since we ship ONE image for both, enabling it means overclocking the Pi 3's
+      card on every unit. Test it deliberately during the Pi 3 leg, from a clean
+      Pi 3 baseline, with [`scripts/x16-sdbench.sh`](scripts/x16-sdbench.sh).
+      Note the independent third distro, BeePi 3.1 — a *Pi 3* image — does **not**
+      ship it. So the "two mature distros" evidence is one base that does and one
+      independent build that declines.
+
+- [ ] **1a. The card IS the bottleneck — so buy a better card, don't overclock a
+      bad one.** This is what the measurement actually found, and it is the
+      biggest boot-speed lever left. On a clean boot the Pi 4 spends
+      **15.2–15.6 s of a 17.0 s boot waiting on card reads** (`read_wait` from
+      `/sys/block/mmcblk0/stat`, 95.8 MB read, 2 253 reads). Not CPU, not
+      services — the card.
+      And the dev card is a **Samsung dated 07/2011**: SD High Speed only, 3.3 V
+      signalling, UHS speed grade 0 in its SSR, measuring **21.4 MB/s sequential
+      and 5.0 MB/s on 4 K reads** — and 4 K random is what boot actually pays.
+      A modern UHS-I A1/A2 card would negotiate 1.8 V SDR104 on the Pi 4's emmc2
+      controller instead of topping out at 50 MHz High Speed, and A1 guarantees
+      an order of magnitude more random IOPS. That needs no config change and
+      carries no overclock risk.
+      Do NOT quote a predicted saving — `read_wait` overlaps with CPU work, so it
+      is an upper bound, not a subtraction. Measure it: same image, same
+      procedure, modern card, compare `systemd-analyze` + `read_wait`.
+      Method note learned here: **within one boot the sequential figure is stable
+      to ±1 %, but across boots it moves ~5 %.** So compare across-boot numbers
+      only against across-boot noise, and never call a 5 % change a result.
 
 - [ ] **2. `console=tty3` instead of `quiet loglevel=0`.** Both images send the
       kernel/systemd console to an unused VT and keep `loglevel=1`, rather than

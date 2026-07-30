@@ -59,6 +59,15 @@ boot_fat() {
 }
 FAT="$(boot_fat)"
 
+# The regulatory domain every owner gets unless they edit x16-wifi.conf. It has
+# to be the same in all four places or DietPi can change it under a shipped unit
+# (see the country block below); check-image.sh asserts the agreement.
+SHIP_COUNTRY="US"
+# The name Windows shows for the card's drop drive. Set on the IMAGE rather than
+# here — /boot/firmware is mounted and bind-mounted into the running emulator, so
+# relabelling it live is not reliably persistent. scripts/release/set-fat-label.sh.
+SHIP_FAT_LABEL="X16PI"
+
 CHANGES=0
 run() {
   CHANGES=$((CHANGES + 1))
@@ -109,12 +118,14 @@ if [ -f "$FAT/x16-wifi.conf" ]; then
   fi
   # Deliberately NOT blanked: DietPi prints a boot warning with no country code,
   # and this appliance's whole premise is that only the X16 is ever on screen.
-  # It ships as the owner's default, so it wants to be a decision.
-  cc=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$FAT/x16-wifi.conf" | head -1)
-  case "$cc" in
-    [A-Za-z][A-Za-z]) note "shipping country code '$cc' as the default" ;;
-    *) note "!! no valid country code ('${cc:-empty}') — set X16_WIFI_COUNTRY before capture" ;;
-  esac
+  # It ships as the owner's default, so it is a decision: SHIP_COUNTRY, below.
+  cc=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$FAT/x16-wifi.conf" | head -1 | tr -d '\r')
+  if [ "$cc" = "$SHIP_COUNTRY" ]; then
+    note "shipping country code '$cc' as the default"
+  else
+    note "country is '${cc:-empty}', shipping '$SHIP_COUNTRY'"
+    run sed -i "s/^X16_WIFI_COUNTRY=.*/X16_WIFI_COUNTRY=${SHIP_COUNTRY}/" "$FAT/x16-wifi.conf"
+  fi
 else
   note "!! $FAT/x16-wifi.conf missing — the owner's Wi-Fi route depends on it"
 fi
@@ -132,6 +143,42 @@ if [ -f /opt/x16/x16-wifi.conf.original ]; then
 elif [ -f "$FAT/x16-wifi.conf" ]; then
   note "no reset template yet — will build it from the (blanked) card copy"
   run make_wifi_template
+fi
+# The country has to agree in every place that can write it, not just on the card.
+# It shipped split once — card and template 'US', both dietpi.txt copies 'GB' —
+# and that is not cosmetic: the applier reads the card, but dietpi-config and any
+# DietPi update read dietpi.txt and run dietpi-set_hardware, so the regulatory
+# domain can change on a unit already in an owner's hands. The symptom is
+# indistinguishable from a wrong passphrase.
+#
+# The template matters for a second reason: the applier rebuilds the card from it
+# after a successful join, so a stale country here reappears later, not now.
+tcc=$(sed -n 's/^X16_WIFI_COUNTRY=//p' /opt/x16/x16-wifi.conf.original 2>/dev/null | head -1 | tr -d '\r')
+if [ -f /opt/x16/x16-wifi.conf.original ] && [ "$tcc" != "$SHIP_COUNTRY" ]; then
+  note "reset template says '${tcc:-empty}' — the card would revert to it after a join"
+  run sed -i "s/^X16_WIFI_COUNTRY=.*/X16_WIFI_COUNTRY=${SHIP_COUNTRY}/" /opt/x16/x16-wifi.conf.original
+fi
+# Both filesystems carry a dietpi.txt on Bookworm: /boot is the ext4 root and
+# /boot/firmware is the card. Fix whichever exist.
+for dt in "$FAT/dietpi.txt" /boot/dietpi.txt; do
+  [ -f "$dt" ] || continue
+  dcc=$(sed -n 's/^AUTO_SETUP_NET_WIFI_COUNTRY_CODE=//p' "$dt" | head -1 | tr -d '\r')
+  [ -n "$dcc" ] || continue
+  if [ "$dcc" = "$SHIP_COUNTRY" ]; then
+    note "$dt already agrees ('$dcc')"
+  else
+    note "$dt says '$dcc' — DietPi would act on that, not on the card"
+    run sed -i "s/^AUTO_SETUP_NET_WIFI_COUNTRY_CODE=.*/AUTO_SETUP_NET_WIFI_COUNTRY_CODE=${SHIP_COUNTRY}/" "$dt"
+  fi
+done
+# Reported, not done here: see SHIP_FAT_LABEL above for why it is an image step.
+lbl=$(findmnt -no SOURCE "$FAT" 2>/dev/null | xargs -r blkid -o value -s LABEL 2>/dev/null || true)
+if [ "$lbl" = "$SHIP_FAT_LABEL" ]; then
+  note "FAT drive label is '$lbl'"
+else
+  note "FAT drive label is '${lbl:-none}', want '$SHIP_FAT_LABEL' — applied to the
+    IMAGE after capture by scripts/release/set-fat-label.sh, not on this Pi.
+    check-image.sh fails the image if it is missing."
 fi
 if [ -f "$FAT/dietpi-wifi.txt" ] && grep -qE "^aWIFI_(SSID|KEY)\[0\]='.+'" "$FAT/dietpi-wifi.txt"; then
   run sed -i -e "s/^aWIFI_SSID\[0\]=.*/aWIFI_SSID[0]=''/" \

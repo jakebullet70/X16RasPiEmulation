@@ -87,14 +87,45 @@ Don't hand-edit `/etc/wpa_supplicant/wpa_supplicant.conf` on this appliance.
 per-interface `wpa_supplicant-wlan0.conf` that systemd's template unit is the one
 actually reading — so a hand edit is either overwritten or ignored.
 
-Set it where it lasts:
+The shipped default is **`US`**, and it has to be `US` in **four** places or
+DietPi can change it back on its own. Set it where it lasts:
 
-- `X16_WIFI_COUNTRY=GB` in `x16-wifi.conf` on the FAT partition (this is also the
+- `X16_WIFI_COUNTRY=US` in `x16-wifi.conf` on the FAT partition (this is also the
   owner's route — no shell needed).
-- `AUTO_SETUP_NET_WIFI_COUNTRY_CODE=GB` in `dietpi.txt`, for DietPi's own tools.
+- `X16_WIFI_COUNTRY=US` in `/opt/x16/x16-wifi.conf.original`, the ext4 template
+  the applier rebuilds the card from after a successful join. Miss this one and
+  the country reverts *later*, not at capture.
+- `AUTO_SETUP_NET_WIFI_COUNTRY_CODE=US` in **both** `dietpi.txt` files, for
+  DietPi's own tools. There are two on Bookworm — `/boot/dietpi.txt` on the ext4
+  root and `/boot/firmware/dietpi.txt` on the card — separate files, not links.
+  This is the half that looks cosmetic and isn't: `dietpi-config` and DietPi
+  updates read the key and run `dietpi-set_hardware serialconsole`-style
+  reconfiguration, so a stale `GB` here can reset the regulatory domain on a unit
+  already in an owner's hands.
+
+`prep-image-source.sh` now rewrites all four to agree, and `check-image.sh` fails
+an image where the template or either `dietpi.txt` disagrees with the card.
 
 The radio comes up rfkill-soft-blocked until a regulatory domain is set, so a
 missing or wrong country looks exactly like a wrong password.
+
+## The FAT drive's name
+
+The shipped label is **`X16PI`** — `dist/README-end-user.md` tells the owner to
+look for a drive by that name, so an unlabelled card makes the README wrong.
+
+It cannot be set on the running Pi: `/boot/firmware` is mounted *and* its `x16/`
+folder is bind-mounted into the emulator's fsroot, so the kernel's cached boot
+sector can overwrite a live `fatlabel` on unmount. Do it offline on the capture:
+
+```bash
+sudo scripts/release/set-fat-label.sh --label X16PI <image.img>
+sudo scripts/release/set-fat-label.sh --check <image.img>   # just report
+```
+
+`make-release.ps1` runs this automatically (`-FatLabel`, default `X16PI`). The
+script refuses to finish if the FAT **volume serial** changed — `/etc/fstab`
+mounts `/boot/firmware` by it, so that would boot with no boot partition.
 
 ## Wi-Fi is disabled in TWO places, not one
 

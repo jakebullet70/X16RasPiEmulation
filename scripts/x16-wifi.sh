@@ -115,7 +115,7 @@ join_network() {
     {
       echo "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev"
       echo "update_config=1"
-      echo "country=${X16_WIFI_COUNTRY:-GB}"
+      echo "country=${X16_WIFI_COUNTRY:-US}"
     } > "$WPA_CONF"
   fi
   # Drop any previous block for this SSID so repeats don't stack up.

@@ -113,6 +113,7 @@ dist/              what ships to end users alongside the .img.gz
 | [x16-splash.sh](scripts/x16-splash.sh) | Paints the boot splash straight to `/dev/fb0` |
 | [fetch-sdcard.sh](scripts/fetch-sdcard.sh) | Populates the `-fsroot` with the community SD-card tree (games, demos, BASIC) |
 | [setup-samba.sh](scripts/setup-samba.sh) | Shares the program folder on the LAN so you can drag-drop `.PRG`/`.BAS` files without pulling the card |
+| [x16-sdbench.sh](scripts/x16-sdbench.sh) | Measures SD speed, how much of boot is spent waiting on the card, and whether the card still returns correct data — the integrity half is why it exists |
 | [smoke-test.sh](scripts/smoke-test.sh) | Headless install/launch check for a VM, container, or CI |
 
 ### `scripts/release/`
@@ -126,7 +127,8 @@ which runs the rest inside WSL Ubuntu.
 | [prep-image-source.sh](scripts/release/prep-image-source.sh) | the Pi | Re-arms DietPi's first-boot resize (it disarms itself after every run) and strips Wi-Fi credentials, `.bak` litter, logs. Dry-run by default |
 | [capture-image.sh](scripts/release/capture-image.sh) | WSL / Linux | Reads the card to a raw `.img` — from a USB reader, or over SSH from a running Pi |
 | [refit-fat.sh](scripts/release/refit-fat.sh) | WSL / Linux | Rebuilds the capture with a bigger FAT partition — impossible on a live card, since the root's start has to move. Preserves PARTUUIDs and both filesystem UUIDs, so no `cmdline.txt`/`fstab` edits |
-| [check-image.sh](scripts/release/check-image.sh) | WSL / Linux | Read-only audit of a capture before it ships: resize armed, no credentials on either partition, autostart index, `/var/log` in RAM, FAT size and label |
+| [set-fat-label.sh](scripts/release/set-fat-label.sh) | WSL / Linux | Names the FAT drive `X16PI` (the owner's first impression), offline — a live relabel may not survive the unmount. Verifies the FAT volume serial and MBR disk id are untouched |
+| [check-image.sh](scripts/release/check-image.sh) | WSL / Linux | Read-only audit of a capture before it ships: resize armed, no credentials on either partition, autostart index, `/var/log` in RAM, FAT size, drive label, and one Wi-Fi country code across all four places that hold it |
 | [shrink-image.sh](scripts/release/shrink-image.sh) | WSL / Linux | Shrink + gzip through the vendored PiShrink (`-s -n`) |
 
 ### `config/`

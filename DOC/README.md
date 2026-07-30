@@ -72,6 +72,9 @@ the Commander X16 emulator.
   capture (resize armed, no credentials, no `.bak` litter, FAT size and label).
 - `../scripts/release/refit-fat.sh` — rebuild a capture with a bigger FAT
   partition, offline, preserving PARTUUIDs and both filesystem UUIDs.
+- `../scripts/release/set-fat-label.sh` — name the capture's FAT drive (`X16PI`),
+  offline, verifying the volume serial and MBR disk id survive it. Needed because
+  the refit is off by default and used to be the only thing that set a label.
 - `../scripts/release/shrink-image.sh` — shrink + gzip via the vendored PiShrink.
 - `../scripts/release/make-release.ps1` — Windows entry point; drives the three
   above inside WSL Ubuntu.
@@ -243,6 +246,24 @@ the Commander X16 emulator.
   a directory, aborted the prep mid-way; and the capture hung on an
   unanswerable host-key prompt because WSL runs as root there, whose
   `known_hosts` is empty (fixed with `StrictHostKeyChecking=accept-new`).
+- **Two ship decisions settled** (2026-07-30). **Country code is `US` everywhere**
+  — it had shipped split, and the `dietpi.txt` half was not cosmetic as assumed:
+  `dietpi-config` and DietPi updates act on that key through
+  `dietpi-set_hardware`, so a shipped unit's regulatory domain could change by
+  itself, with a symptom indistinguishable from a wrong passphrase. There are
+  **two** `dietpi.txt` files on Bookworm — `/boot` (ext4) and `/boot/firmware`
+  (card) — separate files, both saying `GB`. `prep-image-source.sh` now makes the
+  card, the ext4 reset template and both `dietpi.txt` copies agree, and
+  `check-image.sh` fails an image where they don't.
+  **The FAT drive is named `X16PI`**, which needed new tooling rather than a flag:
+  the only thing that had ever set a label was `refit-fat.sh`'s `mkfs.vfat -n`,
+  and the refit is off by default now that FAT stays at 128 MB — so the label had
+  no path to the shipped image. `set-fat-label.sh` does it offline on the capture
+  (not on the Pi: `/boot/firmware` is mounted and bind-mounted into the running
+  emulator, so a live relabel may not survive the unmount), verifying the FAT
+  volume serial and MBR disk id are untouched — `/etc/fstab` mounts
+  `/boot/firmware` by that serial. Tested against a synthetic card image
+  including the dirty-bit case a live capture always carries.
 - **Resume point:** flash `x16-appliance-r49.img.gz` to a blank card and boot it —
   the **Pi 4 first**, so a failure can only be the Wi-Fi rewrite, then the same
   card into the **Pi 3** for Gate 5's second-Pi requirement plus the 720p splash
@@ -252,9 +273,14 @@ the Commander X16 emulator.
 ## Open questions
 
 - Phase 5 output (`x16-appliance-r49.img.gz` + README) is the shippable distro.
-- Should the FAT partition carry a volume label (`X16`?) so the owner sees a
-  named drive rather than a bare letter? `refit-fat.sh --label X16` would do it
-  in passing, and the rebuild is the moment — currently it has none.
-- Which country code ships as the owner's default? The dev Pi says `US`,
-  `dietpi.txt` says `GB`, the repo template says `GB`. Whatever is on the card at
-  capture time is what every owner gets.
+- The dev Pi's dropbear host keys are baked into the image. `--reset-host-keys`
+  regenerates them; dropbear runs without `-R` here, so simply deleting them
+  would ship an image with no SSH at all.
+- **`config/x16-wifi.conf` in the repo is not the file that ships.** The card and
+  the ext4 reset template carry a terse 7-line version (261 bytes); the repo's is
+  the 25-line owner-facing one with the "leave empty to stay on Ethernet",
+  country-examples and plain-text-warning comments. `prep-image-source.sh` builds
+  the template from *the card*, so the repo copy has never been deployed. Since
+  `dist/README-end-user.md` sends the owner into this file to edit it, the
+  in-file guidance is the guidance — decide whether to push the repo version onto
+  the card before capture.

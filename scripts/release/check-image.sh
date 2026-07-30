@@ -251,20 +251,79 @@ echo "-- the owner's first look --"
       the card on first boot, so a mangled x16-wifi.conf becomes the template"
 # A missing country code makes DietPi print a warning at boot, which breaks the
 # "nothing but the X16 is ever on screen" rule Phase 4 exists to enforce.
-WIFI_CC=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$MNT_FAT/x16-wifi.conf" 2>/dev/null | head -1)
+#
+# It also has to be the SAME code everywhere. It shipped split once — the card
+# and the ext4 template said US while dietpi.txt said GB — and that is not
+# harmless: the applier reads the card, but dietpi-config and DietPi's own
+# updates read dietpi.txt and run dietpi-set_hardware, so the regulatory domain
+# can change under a shipped unit. A wrong country looks exactly like a wrong
+# password (association simply fails, or only 2.4 GHz works), so it is worth
+# asserting rather than eyeballing.
+SHIP_COUNTRY="US"
+WIFI_CC=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$MNT_FAT/x16-wifi.conf" 2>/dev/null | head -1 | tr -d '\r')
 case "$WIFI_CC" in
-  [A-Za-z][A-Za-z]) pass "x16-wifi.conf ships country '$WIFI_CC'" ;;
+  "$SHIP_COUNTRY") pass "x16-wifi.conf ships country '$WIFI_CC'" ;;
+  [A-Za-z][A-Za-z]) warn "x16-wifi.conf ships country '$WIFI_CC', not the decided
+      '$SHIP_COUNTRY'. Valid, so it will work — but it is the default every owner
+      gets. Deliberate, or left over from a test?" ;;
   *) fail "x16-wifi.conf has no valid country code ('${WIFI_CC:-empty}') — DietPi
       prints a boot-time warning without one, on a machine whose whole point is
       that only the X16 is ever on screen" ;;
 esac
+# The ext4 reset template is what the card is rebuilt from after a successful
+# join, so a stale country here comes back on the owner's next Wi-Fi change.
+TPL_CC=$(sed -n 's/^X16_WIFI_COUNTRY=//p' "$MNT_ROOT/opt/x16/x16-wifi.conf.original" 2>/dev/null | head -1 | tr -d '\r')
+if [ -f "$MNT_ROOT/opt/x16/x16-wifi.conf.original" ] && [ "$TPL_CC" != "$WIFI_CC" ]; then
+  fail "the Wi-Fi reset template says country '${TPL_CC:-empty}' but the card says
+      '${WIFI_CC:-empty}'. The applier rebuilds the card from the template, so the
+      owner's country would silently change the first time Wi-Fi succeeds."
+fi
+# dietpi.txt exists on BOTH filesystems on Bookworm (/boot is the ext4 root,
+# /boot/firmware is the card), and both were found saying GB against a US card.
+# Named by filesystem rather than by path, because the paths here are temp mounts.
+for spec in "the card's dietpi.txt:$MNT_FAT/dietpi.txt" \
+            "ext4 /boot/dietpi.txt:$MNT_ROOT/boot/dietpi.txt"; do
+  dt="${spec#*:}"; dtname="${spec%%:*}"
+  [ -f "$dt" ] || continue
+  DT_CC=$(sed -n 's/^AUTO_SETUP_NET_WIFI_COUNTRY_CODE=//p' "$dt" | head -1 | tr -d '\r')
+  [ -n "$DT_CC" ] || continue
+  if [ "$DT_CC" != "$WIFI_CC" ]; then
+    fail "$dtname says AUTO_SETUP_NET_WIFI_COUNTRY_CODE=$DT_CC but x16-wifi.conf
+      ships '$WIFI_CC'. DietPi acts on its own key on update or whenever
+      dietpi-config runs, so the two must agree."
+  else
+    pass "$dtname agrees on country '$DT_CC'"
+  fi
+done
 [ -f "$MNT_FAT/x16/README.TXT" ] && pass "x16/README.TXT in the drop folder" \
                                  || fail "no README.TXT in the FAT x16/ folder (ship dist/fat-x16-README.TXT)"
-LABEL=$(lsblk -no LABEL "${LOOP}p1" 2>/dev/null || true)
+# The drop drive's name is the first thing an owner sees when the card goes into
+# a PC, and dist/README-end-user.md now names it. It shipped unlabelled once —
+# Windows showed "Removable Disk (E:)" against a README promising a named drive.
+# Only the refit used to set it, and the refit is off by default; that is what
+# scripts/release/set-fat-label.sh exists to close.
+SHIP_FAT_LABEL="X16PI"
+# blkid, NOT lsblk. lsblk answers from udev's database, and on a loop device this
+# script has just created there may be no entry yet — it reported an empty label
+# for an image that was correctly labelled, which would have failed a good build.
+# blkid reads the filesystem itself. (Both read the boot sector's BS_VolLab; the
+# root-directory ATTR_VOLUME_ID entry is what Windows shows, and fatlabel writes
+# both — verified by walking the root dir's full cluster chain, since the entry
+# is not necessarily in the first cluster.)
+LABEL=$(blkid -o value -s LABEL "${LOOP}p1" 2>/dev/null || true)
 FATSZ=$(df -B1 --output=size "$MNT_FAT" | tail -1)
 FATAV=$(df -B1 --output=avail "$MNT_FAT" | tail -1)
 info "FAT drive label: '${LABEL:-none}'  size $(numfmt --to=iec --suffix=B "$FATSZ")  free $(numfmt --to=iec --suffix=B "$FATAV")"
 info "  ^ dist/README-end-user.md tells the owner roughly this much. Check it."
+case "$LABEL" in
+  "$SHIP_FAT_LABEL") pass "FAT drive is named '$LABEL', as the end-user README says" ;;
+  "") fail "the FAT partition has NO volume label, so Windows shows the owner a
+      bare drive letter while dist/README-end-user.md tells them to look for a
+      drive named '$SHIP_FAT_LABEL'.
+      Fix: scripts/release/set-fat-label.sh --label $SHIP_FAT_LABEL <image>" ;;
+  *) warn "FAT drive is named '$LABEL', not the '$SHIP_FAT_LABEL' the end-user
+      README tells the owner to look for." ;;
+esac
 # 128 MB is DietPi's stock size and the shipped choice: ~97 MB free still holds
 # thousands of .PRG files, and the space is worth more to the root filesystem on
 # a 4 GB card. Only complain if it is small enough to actually cramp an owner.

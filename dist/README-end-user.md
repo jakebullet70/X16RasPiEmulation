@@ -38,8 +38,8 @@ The card holds a folder your X16 can read, and you fill it from your computer.
 
 1. Unplug the Pi's power.
 2. Take the SD card out and put it in your computer.
-3. A small drive appears — it may show up with no name at all, just a drive
-   letter. **Ignore any message offering to format the card — click cancel.**
+3. A small drive named **X16PI** appears. **Ignore any message offering to
+   format the card — click cancel.**
    Windows can only see this one small drive; that's normal.
 4. Open the **`x16`** folder on it and copy your `.PRG` and `.BAS` files in.
    There's a `README.TXT` in there with these same instructions.
@@ -94,14 +94,15 @@ The Pi uses a network cable out of the box. To use Wi-Fi instead, you don't need
 a keyboard or any commands — just edit a file on the card:
 
 1. Power the Pi off and put the SD card in your computer.
-2. Open **`x16-wifi.conf`** on the small drive that appears, in any plain text
-   editor (Notepad is fine).
-3. Fill in your network name and password, and set your country:
+2. Open **`x16-wifi.conf`** on the **X16PI** drive, in any plain text editor
+   (Notepad is fine).
+3. Fill in your network name and password, and set your country if you are not
+   in the United States:
 
    ```text
    X16_WIFI_SSID=YourNetworkName
    X16_WIFI_PSK=YourPassword
-   X16_WIFI_COUNTRY=GB
+   X16_WIFI_COUNTRY=US
    ```
 
 4. Save, eject the card, put it back in the Pi, and power on.
@@ -125,8 +126,9 @@ are still in `x16-wifi.conf`, the Pi did *not* get connected.
 Notes:
 
 - The country code is required. Wi-Fi is regulated per country and the Pi won't
-  transmit properly until it knows where it is. `GB`, `US`, `DE`, `FR`, `AU`, …
-  Leave it filled in — the Pi keeps it when it clears the rest.
+  transmit properly until it knows where it is. It ships set to `US` — change it
+  if that is not where you are (`GB`, `DE`, `FR`, `AU`, …). Never leave it empty;
+  the Pi keeps it when it clears the rest.
 - The network name is case-sensitive, and so is the password.
 - The password is in a plain text file until the Pi connects and empties it, so
   eject the card rather than leaving it in a shared computer in the meantime.

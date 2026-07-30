@@ -39,7 +39,10 @@ param(
     # already holds thousands of .PRG files. Set a size only if you deliberately
     # want a bigger drop folder; it costs root-filesystem space on small cards.
     [int]$FatMB       = 0,
-    [string]$FatLabel,
+    # The name Windows shows for the card's drop drive. It is the owner's first
+    # impression, and an unlabelled card reads as "Removable Disk (E:)".
+    # Applied whether or not the FAT is refitted; '' skips labelling entirely.
+    [string]$FatLabel = 'X16PI',
     [switch]$SkipCapture,
     [switch]$TransportGzip
 )
@@ -137,6 +140,15 @@ if ($FatMB -gt 0) {
     $refit += $raw
     Invoke-Wsl -Label "refit FAT to $FatMB MB" -Argv $refit
     Invoke-Wsl -Label 'drop the raw capture' -Argv @('rm', '-f', $raw)
+}
+
+# --- name the drop drive -----------------------------------------------------
+# Runs after any refit (which mkfs's a fresh FAT and would drop the label), and
+# unconditionally otherwise, because the refit is off by default and used to be
+# the only thing that ever set a label.
+if ($FatLabel) {
+    Invoke-Wsl -Label "label the FAT drive '$FatLabel'" `
+               -Argv @('bash', "$repo/scripts/release/set-fat-label.sh", '--label', $FatLabel, $img)
 }
 
 # --- check + shrink ----------------------------------------------------------

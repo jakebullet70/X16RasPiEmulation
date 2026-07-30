@@ -276,8 +276,30 @@ filesystem), and the FAT volume serial via `mkfs.vfat -i` (so `/etc/fstab`'s
 `UUID=` line still mounts `/boot/firmware`). Nothing inside either filesystem is
 touched and no config needs editing. It verifies all three before exiting.
 
-`--label X16` will also name the drive, which the owner sees in their file
-manager — currently it has none.
+`--label` names the drive too, and now defaults to `X16PI` — a refit does a fresh
+`mkfs.vfat`, so without that default it would silently strip a label already set.
+
+### B.2a Name the FAT drive
+
+```bash
+scripts/release/set-fat-label.sh --label X16PI x16-appliance-r49.img
+```
+
+Needed as its own step because **the refit above is off by default** — FAT stays
+at DietPi's stock 128 MB — and `refit-fat.sh` was the only thing that had ever
+set a label. So the shipped card came out unlabelled, showing the owner
+"Removable Disk (E:)" while `dist/README-end-user.md` told them to look for a
+drive named `X16PI`.
+
+Offline, like the refit, but for a different reason: on the Pi `/boot/firmware` is
+mounted *and* its `x16/` folder is bind-mounted into the running emulator's
+fsroot, so the kernel's cached boot sector can overwrite a live `fatlabel` when it
+unmounts. On an image nothing is mounted and the result is deterministic.
+
+It clears the FAT dirty bit first — a capture from a running Pi always has it set,
+and `fatlabel` refuses to write to a volume flagged dirty — then refuses to finish
+if the **FAT volume serial** changed, because `/etc/fstab` mounts
+`/boot/firmware` by it and the image would boot with no boot partition.
 
 ### B.3 Check before you shrink
 
