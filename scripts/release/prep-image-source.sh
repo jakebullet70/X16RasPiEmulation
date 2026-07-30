@@ -315,6 +315,9 @@ shopt -u nullglob
 # orphaned x16-wifi-apply.bak-*, x16-pull.tgz / x16scripts.tgz staging archives
 # and a config.txt saved before the SD-overclock test. None of it is dangerous;
 # all of it is somebody else's mess arriving inside a product.
+# Added after the second survey (2026-07-30): a cmdline.txt saved before the
+# console=tty3 test, and a hand-written cleanup.sh (apt clean / journal vacuum /
+# swapoff) — a maintenance helper for THIS Pi, not something an owner should find.
 #
 # Deliberately a NAMED LIST rather than "empty /root": the dotfiles there are real
 # (.bashrc, .profile, .hushlogin, .ssh) and blowing them away would change how a
@@ -323,8 +326,10 @@ shopt -u nullglob
 shopt -s nullglob
 for f in /root/sdbench*.txt /root/sdbench*.sh /root/oc100.log \
          /root/config.txt.orig-* /root/config.txt.bak* \
+         /root/cmdline.txt.orig-* /root/cmdline.txt.bak* \
          /root/custom.sh.prev-* /root/custom.sh.bak* \
          /root/x16-wifi-apply.bak-* /root/prep-image-source.sh \
+         /root/cleanup.sh \
          /root/x16-pull.tgz /root/x16scripts.tgz /root/install.log \
          /root/x16-backup-* /root/x16-pull /root/x16-deploy; do
   run rm -rf "$f"
@@ -342,8 +347,9 @@ for f in /root/*; do
     scripts) continue ;;                      # DietPi's own staging dir, left on purpose
     sdbench*|oc100.log|install.log) continue ;;
     config.txt.orig-*|config.txt.bak*) continue ;;
+    cmdline.txt.orig-*|cmdline.txt.bak*) continue ;;
     custom.sh.prev-*|custom.sh.bak*) continue ;;
-    x16-wifi-apply.bak-*|prep-image-source.sh) continue ;;
+    x16-wifi-apply.bak-*|prep-image-source.sh|cleanup.sh) continue ;;
     x16-pull|x16-pull.tgz|x16scripts.tgz|x16-deploy|x16-backup-*) continue ;;
     *) leftover="$leftover $b" ;;
   esac
