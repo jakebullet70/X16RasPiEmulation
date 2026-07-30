@@ -449,9 +449,34 @@ that's actually ready.
 
 ## Phase 4 leftovers (subjective — need eyes on the TV)
 
-- [ ] Cold-boot and confirm nothing flashes on screen before the splash: no
-      kernel text, no cursor, no login line.
-- [ ] Load something that scrolls and check for tearing / judder.
+- [x] Cold-boot and confirm nothing flashes on screen before the splash: no
+      kernel text, no cursor, no login line. **PASSED 2026-07-30** on the first
+      power-on of a freshly flashed 4 GB card, confirmed by eye and by
+      `/dev/vcs1` holding 0 non-blank characters. Note what made it pass: the
+      first-boot resize dumps a screenful of partition tables and mount errors
+      to `/dev/console`, and all 1531 characters of it were found in
+      `/dev/vcs3`. Without `console=tty3` that lands on the owner's TV.
+- [x] Load something that scrolls and check for tearing / judder. **PASSED
+      2026-07-30**, plus an end-to-end drop-folder test: `@CD:FAT-FILES`, `@$`,
+      `LOAD"PORTAL16.PRG",8`, `RUN`.
+
+## Release packaging
+
+- [ ] **The v1.0.0 asset cannot be flashed straight from the download.** It is
+      `x16-appliance-r49.zip`, a four-file bundle whose *first* entry is
+      `fat-x16-README.TXT`, with the image doubly compressed (`.img.gz` inside
+      `.zip`). Raspberry Pi Imager takes the first entry of an archive, so
+      pointing it at this zip does not write the image. Both
+      [dist/RELEASE.md](dist/RELEASE.md) and
+      [dist/README-end-user.md](dist/README-end-user.md) say "flash
+      `x16-appliance-r49.img.gz`" and never mention unzipping first — so the
+      owner's very first step is undefined.
+      Fix, cheapest first: attach `x16-appliance-r49.img.gz` to the release as a
+      *second* asset. Imager handles `.gz` natively, the docs then match reality
+      with no edit, and the zip stays as the everything-bundle. Otherwise add an
+      "extract this first" line to both docs.
+      (The zip's contents are verified good — the inner `.img.gz` matches the
+      local build on size and CRC32 `BACF9534`.)
 
 ## Nice to have
 

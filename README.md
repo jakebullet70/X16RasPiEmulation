@@ -1,5 +1,9 @@
 # Commander X16 on Raspberry Pi
 
+> **Parked 2026-07-30 — the image is finished.** Picking this up cold? Read
+> [RESUME.md](RESUME.md) first: where the built image lives, what you need to
+> rebuild, and the traps that cost days the first time.
+
 Turn a Raspberry Pi 4 into a **Commander X16 appliance**: power on, and the
 machine goes straight to the X16's `READY.` prompt fullscreen on your TV — no
 desktop, no login, no shell. Pull the plug when you're done.
